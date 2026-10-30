@@ -119,7 +119,7 @@ const fmtDate = (d) =>
 
 // lists: [{ name, examples: [testi di voci già presenti] }] — gli esempi aiutano a capire a cosa serve ogni lista
 // todo: [{ text, list }] voci ancora da fare, numerate nel prompt: l'AI indica quali risultano già fatte
-// Risultato: { items: [{ text, list, due, time, in, remind, repeat }], done: [indici in todo], notes: [{ title, text }], search: { query, keywords } | null }
+// Risultato: { items: [{ text, list, due, time, in, remind, repeat }], done: [indici in todo], notes: [{ title, text, idea }], search: { query, keywords } | null }
 export async function organize(text, lists, settings, { openList, fallback, todo = [], inNotes = false }) {
   const now = new Date();
   const hm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -133,10 +133,11 @@ export async function organize(text, lists, settings, { openList, fallback, todo
 
 PRIMA DI TUTTO decidi di che tipo è ogni parte della frase:
 - APPUNTO ("notes"): descrive come stanno le cose, un dato o un'informazione da conservare, SENZA chiedere di fare qualcosa. Vale anche senza "prendi nota": "il codice del garage è 123123", "la password del wifi è pippo123", "il PIN della carta è 4455", "la targa della macchina è AB123CD", "il dentista si chiama Rossi", "il numero dell'idraulico è 333 1234567", "l'indirizzo di Luca è via Roma 3", "Marco ha detto che il preventivo arriva a fine mese", "idea per il regalo di Anna: un corso di ceramica".
+- IDEA ("notes" con "idea": true): una proposta o un'ipotesi, non un impegno preso. Si riconosce dal condizionale o dal tono possibilista: "si potrebbe dipingere la porta di rosso", "potremmo andare in Portogallo quest'estate", "sarebbe bello fare un orto", "magari regalo a Luca una bici", "e se aprissi un blog?", "mi piacerebbe imparare il piano", "perché non cambiamo il divano", "idea: …". Anche se contiene un verbo d'azione NON è una cosa da fare.
 - COSA DA FARE ("items"): c'è un'azione da compiere ("comprare il latte", "devo chiamare il tecnico", "cambiare il codice del garage", "ricordami di pagare la bolletta").
 - RICERCA ("search"): vuole ritrovare qualcosa che ha già salvato.
 - COSA GIÀ FATTA ("done"): dice di aver fatto qualcosa che era da fare.
-Nel dubbio fra appunto e cosa da fare chiediti: c'è un verbo d'azione da spuntare? Se no, è un appunto.
+Nel dubbio fra appunto e cosa da fare chiediti: c'è un verbo d'azione da spuntare? Se no, è un appunto. Se l'azione è solo ipotizzata ("si potrebbe", "magari", "sarebbe bello"), è un'idea.
 
 Oggi è ${day} (${fmtDate(now)}), sono le ${hm}.
 
@@ -152,7 +153,7 @@ COSE GIÀ FATTE: se l'utente dice di aver già fatto qualcosa ("ho preso le pata
 RICERCA: se l'utente vuole TROVARE o RICORDARE qualcosa che ha già salvato ("cerca il nome della clinica", "trova il codice del cancello", "dov'è il numero dell'idraulico", "qual era la password del wifi?", "come si chiamava il ristorante che mi hanno consigliato?", "mostrami le cose della spesa") NON creare voci né appunti: metti in "search" {"query": la domanda riformulata in breve, "keywords": 3-8 parole chiave in minuscolo, al singolare, comprese parole simili e sinonimi utili a trovarla (es. clinica → ["clinica","ospedale","veterinario","studio","medico","dottore"])}. Attenzione: "cercare un idraulico" o "devo cercare casa" sono cose da FARE, non ricerche. Se non è una ricerca, "search" è null.
 
 APPUNTI: non tutto è una cosa da fare. Un'informazione da conservare, un dato (codici, password, PIN, numeri di telefono, indirizzi, nomi, targhe, misure), un'idea, un pensiero, il riassunto di una telefonata o di una riunione va in "notes" e NON in "items", anche se l'utente non dice "prendi nota". Un appunto non ha un'azione da spuntare. Se invece c'è un'azione da compiere ("devo", "comprare", "chiamare", "ricordami di") è una voce in "items". Una stessa frase può contenere entrambi.
-Per ogni appunto: "title" breve (2-5 parole, iniziale maiuscola, senza punto) e "text" con TUTTO il contenuto dettato, fedele, con punteggiatura e maiuscole corrette e gli errori di trascrizione evidenti sistemati; dividilo in paragrafi (\\n) se è lungo. Non riassumere e non inventare. Togli solo le parole di servizio iniziali ("prendi nota", "appunto", "annota che").
+Per ogni appunto: "idea" true se è un'idea, altrimenti false; "title" breve (2-5 parole, iniziale maiuscola, senza punto) e "text" con TUTTO il contenuto dettato, fedele, con punteggiatura e maiuscole corrette e gli errori di trascrizione evidenti sistemati; dividilo in paragrafi (\\n) se è lungo. Non riassumere e non inventare. Togli solo le parole di servizio iniziali ("prendi nota", "appunto", "annota che").
 ${inNotes ? '\nL\'utente è nella sezione NOTE: tutto quello che detta è un appunto (metti tutto in "notes"), a meno che non dica esplicitamente di aggiungere una cosa da fare.\n' : ''}
 Come decidere la lista ("list"):
 A. Se l'utente indica dove metterla, anche in modo approssimativo o informale ("mettilo nel lavoro", "per casa", "nella spesa", "lista ufficio", "aggiungi a regali"), usa la lista esistente che corrisponde, anche se il nome non coincide esattamente.
@@ -172,7 +173,8 @@ Come scrivere le voci:
 Togli sempre dal testo le indicazioni di giorno, orario, ricorrenza e avviso ("domani", "alle 16", "avvisami mezz'ora prima", "tra 20 minuti").
 
 Esempi di risposta:
-- "il codice del garage è 123123" → {"items":[],"done":[],"notes":[{"title":"Codice del garage","text":"Il codice del garage è 123123."}],"search":null}
+- "il codice del garage è 123123" → {"items":[],"done":[],"notes":[{"idea":false,"title":"Codice del garage","text":"Il codice del garage è 123123."}],"search":null}
+- "si potrebbe dipingere la porta di rosso" → {"items":[],"done":[],"notes":[{"idea":true,"title":"Porta rossa","text":"Si potrebbe dipingere la porta di rosso."}],"search":null}
 - "comprare il latte" → {"items":[{"text":"Comprare il latte","list":"(la lista adatta)","due":null,"time":null,"in":null,"remind":null,"repeat":null}],"done":[],"notes":[],"search":null}
 - "la password del wifi è pippo123 e domani devo chiamare il tecnico" → un appunto in "notes" ("Password del wifi") e una voce in "items" ("Chiamare il tecnico", due domani).
 
@@ -200,7 +202,7 @@ Rispondi SOLO con JSON valido, senza altro testo:
     .filter((n) => n >= 0 && n < todo.length))];
   const notes = (Array.isArray(obj.notes) ? obj.notes : [])
     .filter((n) => n && typeof n.text === 'string' && n.text.trim())
-    .map((n) => ({ title: typeof n.title === 'string' ? n.title.trim().slice(0, 80) : '', text: n.text.trim() }));
+    .map((n) => ({ title: typeof n.title === 'string' ? n.title.trim().slice(0, 80) : '', text: n.text.trim(), idea: n.idea === true }));
   const sq = obj.search && typeof obj.search === 'object' && typeof obj.search.query === 'string' && obj.search.query.trim() ? obj.search : null;
   const search = sq ? {
     query: sq.query.trim(),

@@ -617,3 +617,10 @@ button.answer:active { transform: scale(.99); }
 .ai-status .ico { font-size: 15px; margin-top: 1px; flex: none; color: var(--accent-ink); }
 .ai-status.ok .ico { color: #2F9E44; }
 .ai-status.muted .ico { color: var(--text-3); }
+.tag.idea { --c: var(--accent-ink); background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent-ink); }
+.tag.idea .ico { font-size: 12px; }
+.item.note.is-idea .item-body { border-left-style: dashed; }
+.note-filter { margin-bottom: 12px; }
+.note-filter button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.note-filter .ico { font-size: 14px; }
+.note-filter span { font-size: 12px; opacity: .7; }

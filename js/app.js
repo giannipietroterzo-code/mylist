@@ -77,15 +77,19 @@ function parseQuick(raw, fallbackListId) {
 }
 
 // ---------- Appunti senza AI: "prendi nota…", "appunto:", "annota che…", "segna che…" ----------
-const NOTE_HEAD = /^\s*(?:(?:ok|allora)[\s,]+)?(?:prendi(?:\s+un)?\s+(?:nota|appunt[oi])|prendere\s+nota|appunto|annota(?:mi|re)?|nota(?:\s+bene)?|memo|segna(?:ti)?\s+che|scrivi\s+che|ricorda\s+che|idea)\b[\s,:.\-]*(?:che\s+|di\s+)?/iu;
+const NOTE_HEAD = /^\s*(?:(?:ok|allora)[\s,]+)?(?:prendi(?:\s+un)?\s+(?:nota|appunt[oi])|prendere\s+nota|appunto|annota(?:mi|re)?|nota(?:\s+bene)?|memo|segna(?:ti)?\s+che|scrivi\s+che|ricorda\s+che)\b[\s,:.\-]*(?:che\s+|di\s+)?/iu;
+// Idee: "idea: …", e il tono possibilista ("si potrebbe…", "magari…", "sarebbe bello…", "e se…")
+const IDEA_LABEL = /^\s*(?:(?:ok|allora)[\s,]+)?(?:ho\s+un['’]?\s*)?idea\b[\s,:.\-]*/iu;
+const IDEA_TONE = /^\s*(?:(?:ok|allora)[\s,]+)?(?:si\s+potrebbe(?:ro)?|potremmo|potrei|sarebbe\s+(?:bello|carino|utile|meglio|ora)|magari|e\s+se|mi\s+piacerebbe|ci\s+piacerebbe|perch[eé]\s+non)\b/iu;
 const cap = (t) => (t ? t[0].toUpperCase() + t.slice(1) : t);
 // null = non è un appunto
 function localNote(text, force = false) {
   const t = text.trim();
+  // "idea per il regalo di Anna: …" → tolgo "idea"; "si potrebbe…" resta com'è, è l'idea stessa
+  if (IDEA_LABEL.test(t)) return { title: '', text: cap(t.replace(IDEA_LABEL, '').trim()) || cap(t), idea: true };
+  if (IDEA_TONE.test(t)) return { title: '', text: cap(t), idea: true };
   if (!force && !NOTE_HEAD.test(t)) return null;
-  const body = cap(t.replace(NOTE_HEAD, '').trim()) || cap(t);
-  // "idea: …" → l'idea resta riconoscibile dal titolo
-  return { title: /^\s*(?:(?:ok|allora)[\s,]+)?idea\b/i.test(t) ? 'Idea' : '', text: body };
+  return { title: '', text: cap(t.replace(NOTE_HEAD, '').trim()) || cap(t), idea: false };
 }
 // Il titolo lo scrive l'AI in base al contenuto (finché non lo scrivi tu); si rifà se cambi il testo
 async function autoTitle(n) {
@@ -180,7 +184,8 @@ function addItems(entries, { reveal = false, done = [], notes = [] } = {}) {
     added.push(it);
   });
   const finishing = done.map((id) => data.items.find((i) => i.id === id && !i.done)).filter(Boolean);
-  const noted = notes.filter((n) => n.text).map((n, i) => ({ id: uid(), title: n.title || '', titleFor: n.title ? n.text : null, text: n.text, createdAt: now - i, updatedAt: now - i }));
+  const noted = notes.filter((n) => n.text).map((n, i) => ({ id: uid(), title: n.title || '', titleFor: n.title ? n.text : null, text: n.text, idea: !!n.idea, createdAt: now - i, updatedAt: now - i }));
+  if (reveal && noted.length) ui.noteFilter = 'all';
   data.notes.unshift(...noted);
   noted.forEach((n) => { ui.fresh.add(n.id); autoTitle(n); });
   if (!added.length && !finishing.length && !noted.length) return;
@@ -226,7 +231,10 @@ function addItems(entries, { reveal = false, done = [], notes = [] } = {}) {
   if (bell.length) nudgeNotify();
   const doneMsg = !finishing.length ? ''
     : finishing.length === 1 ? (added.length ? '1 completata' : finishing[0].repeat ? `Fatto: ${finishing[0].text} · si ripete` : `Fatto: ${finishing[0].text}`) : `${finishing.length} completate`;
-  const noteMsg = !noted.length ? '' : noted.length === 1 ? (added.length || finishing.length ? '1 appunto' : 'Appunto salvato nelle Note') : `${noted.length} appunti`;
+  const ideas = noted.filter((n) => n.idea).length;
+  const noteMsg = !noted.length ? ''
+    : noted.length === 1 ? (added.length || finishing.length ? (ideas ? '1 idea' : '1 appunto') : ideas ? 'Idea salvata nelle Note' : 'Appunto salvato nelle Note')
+    : ideas === noted.length ? `${ideas} idee` : `${noted.length} appunti`;
   toast([addMsg, doneMsg, noteMsg].filter(Boolean).join(' · '), 'Annulla', undo);
 }
 
@@ -412,22 +420,31 @@ function emptyHTML() {
 }
 
 function noteHTML(n) {
-  return `<li class="item note ${ui.fresh.has(n.id) ? 'pop' : ''}" data-id="${n.id}" data-kind="note">
+  return `<li class="item note ${n.idea ? 'is-idea' : ''} ${ui.fresh.has(n.id) ? 'pop' : ''}" data-id="${n.id}" data-kind="note">
     <div class="swipe-bg"><span class="sw-l"></span><span class="sw-r">${icon('trash')}</span></div>
     <div class="item-body">
       <div class="item-main" data-note>
         <div class="note-title">${esc(noteTitle(n))}</div>
         ${n.title || n.text.length > noteTitle(n).length + 2 ? `<div class="note-text">${esc(n.text)}</div>` : ''}
-        <div class="meta"><span class="tag due">${icon('notes')}${noteDate(n.updatedAt || n.createdAt)}</span></div>
+        <div class="meta">${n.idea ? `<span class="tag idea">${icon('bulb')}Idea</span>` : ''}<span class="tag due">${icon('notes')}${noteDate(n.updatedAt || n.createdAt)}</span></div>
       </div>
     </div>
   </li>`;
 }
 
 function renderNotes() {
-  const notes = [...data.notes].sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
-  $('#main').innerHTML = notes.length
-    ? `<ul class="items notes">${notes.map(noteHTML).join('')}</ul>`
+  const all = [...data.notes].sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
+  const nIdeas = all.filter((n) => n.idea).length;
+  const f = nIdeas ? ui.noteFilter || 'all' : 'all';
+  const notes = f === 'ideas' ? all.filter((n) => n.idea) : f === 'notes' ? all.filter((n) => !n.idea) : all;
+  // filtro "Idee" solo quando ce n'è almeno una
+  const seg = nIdeas ? `<div class="seg note-filter" id="noteFilter">
+      <button class="${f === 'all' ? 'on' : ''}" data-f="all">Tutti</button>
+      <button class="${f === 'ideas' ? 'on' : ''}" data-f="ideas">${icon('bulb')}Idee <span>${nIdeas}</span></button>
+      <button class="${f === 'notes' ? 'on' : ''}" data-f="notes">Appunti</button>
+    </div>` : '';
+  $('#main').innerHTML = all.length
+    ? `${seg}<ul class="items notes">${notes.map(noteHTML).join('')}</ul>`
     : `<div class="empty"><div class="empty-emo">${icon('notes')}</div><h2>Nessun appunto</h2><p>Detta o scrivi qui sotto: idee, informazioni, cose da ricordare.<br>Da qualsiasi lista basta iniziare con <i>"prendi nota…"</i></p></div>`;
   ui.fresh.clear();
 }
@@ -446,7 +463,7 @@ function searchResults() {
   const rank = (arr, txt) => arr.map((x) => [x, sc(txt(x))]).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).map(([x]) => x);
   return {
     items: rank(data.items, (i) => `${i.text} ${listOf(i).name}`),
-    notes: rank(data.notes, (n) => `${n.title} ${n.text}`),
+    notes: rank(data.notes, (n) => `${n.title} ${n.text}${n.idea ? ' idea idee' : ''}`),
   };
 }
 function clearSearch() {
@@ -472,7 +489,7 @@ async function startSearch(query, keywords = null, { viaVoice = false } = {}) {
   // l'AI legge solo i risultati migliori e risponde in una frase
   const { items, notes } = searchResults();
   const docs = [
-    ...notes.slice(0, 6).map((n) => ({ kind: 'appunto', ref: { type: 'note', id: n.id }, text: `${n.title ? n.title + ': ' : ''}${n.text}`.slice(0, 700) })),
+    ...notes.slice(0, 6).map((n) => ({ kind: n.idea ? 'idea' : 'appunto', ref: { type: 'note', id: n.id }, text: `${n.title ? n.title + ': ' : ''}${n.text}`.slice(0, 700) })),
     ...items.slice(0, 6).map((i) => ({ kind: i.done ? 'voce completata' : `voce in ${listOf(i).name}`, ref: { type: 'item', id: i.id }, text: `${i.text}${i.due ? ` (${dueLabel(i.due, i.time).text})` : ''}` })),
   ];
   if (!docs.length) return;
@@ -906,11 +923,12 @@ function editNote(id) {
   const restore = snapshot();
   const created = new Date(n.createdAt).toLocaleString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
   openSheet(`
-    <div class="sheet-head"><h2>Appunto</h2><button class="icon-btn" data-close aria-label="Chiudi">${icon('x')}</button></div>
+    <div class="sheet-head"><h2>${n.idea ? 'Idea' : 'Appunto'}</h2><button class="icon-btn" data-close aria-label="Chiudi">${icon('x')}</button></div>
     <input id="nTitle" data-id="${n.id}" class="field note-title-field" placeholder="${aiReady(settings) ? 'Titolo (lo scrive l\'AI)' : 'Titolo'}" value="${esc(n.title)}" autocomplete="off">
     <textarea id="nText" class="field note-body" placeholder="Scrivi o detta qui il tuo appunto…">${esc(n.text)}</textarea>
     <p class="muted small">${icon('notes')} Creato ${created}${n.updatedAt && n.updatedAt - n.createdAt > 60000 ? ` · modificato ${noteDate(n.updatedAt).toLowerCase()}` : ''}</p>
     <div class="row wrap">
+      <button class="chip soft ${n.idea ? 'on' : ''}" id="nIdea">${icon('bulb')}${n.idea ? 'È un\'idea' : 'Segna come idea'}</button>
       <button class="pill-btn ghost" id="nCopy">${icon('copy')}Copia</button>
       ${navigator.share ? `<button class="pill-btn ghost" id="nShare">${icon('share')}Condividi</button>` : ''}
     </div>
@@ -930,6 +948,13 @@ function editNote(id) {
     sheet.addEventListener('close', () => { if (data.notes.includes(n)) autoTitle(n); }, { once: true });
     if (!n.title) autoTitle(n);
     const full = () => (n.title ? `${n.title}\n\n${n.text}` : n.text);
+    $('#nIdea', root).onclick = (e) => {
+      n.idea = !n.idea;
+      e.currentTarget.classList.toggle('on', n.idea);
+      e.currentTarget.innerHTML = `${icon('bulb')}${n.idea ? 'È un\'idea' : 'Segna come idea'}`;
+      saveData();
+      renderMain();
+    };
     $('#nCopy', root).onclick = async () => {
       try { await navigator.clipboard.writeText(full()); toast('Copiato'); } catch (err) { toast('Copia non riuscita'); }
     };
@@ -1250,6 +1275,7 @@ function openSettings() {
         <li><i>ogni giorno alle 8</i>, <i>il lunedì</i>, <i>dal lunedì al venerdì</i> la fanno ripetere</li>
         <li><i>cerca…</i>, <i>trova…</i>, <i>qual era…</i> cercano tra voci e appunti (con l'AI ti risponde anche)</li>
         <li><i>prendi nota…</i>, <i>appunto…</i>, <i>segna che…</i> salvano un appunto nelle Note (con l'AI lo capisce anche da solo)</li>
+        <li><i>si potrebbe…</i>, <i>magari…</i>, <i>sarebbe bello…</i>, <i>idea…</i> diventano Idee</li>
         <li>Scorri a destra ${icon('check')} per completare, a sinistra ${icon('trash')} per eliminare</li>
         <li>Tieni premuta l'icona dell'app sul telefono → <b>Detta</b> per dettare al volo</li>
       </ul>
@@ -1562,6 +1588,8 @@ function bind() {
     if (e.target.closest('.check') && li) return toggleDone(li.dataset.id);
     if (e.target.closest('[data-edit]') && li) return editItem(li.dataset.id);
     if (e.target.closest('[data-note]') && li) return editNote(li.dataset.id);
+    const nf = e.target.closest('#noteFilter [data-f]');
+    if (nf) { ui.noteFilter = nf.dataset.f; buzz(5); return renderNotes(); }
     const ans = e.target.closest('.answer[data-ref]');
     if (ans) {
       const [type, id] = ans.dataset.ref.split(':');
