@@ -28,6 +28,7 @@ const MAP = {
   bell: 'bell',
   clock: 'clock',
   send: 'paper-plane',
+  repeat: 'arrows-repeat',
 };
 
 export function icon(name, cls = '') {

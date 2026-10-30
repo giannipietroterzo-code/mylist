@@ -1,5 +1,6 @@
 // Date, orari e promemoria senza AI: "alle 16:00", "tra 20 minuti", "domani", "avvisami mezz'ora prima"
 // Una voce può avere: due (YYYY-MM-DD), time (HH:MM), remind (minuti di anticipo, 0 = all'ora; null = nessun avviso)
+// e repeat ({ every: 'day' | 'week' | 'month', n: 1, days: [0-6] | null }): quando la completi passa alla volta successiva
 
 export const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 export const hhmm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -19,6 +20,73 @@ export function fromNow(min, now = new Date()) {
 
 // Orario senza giorno: oggi se non è ancora passato, altrimenti domani
 export const dayFor = (time, now = new Date()) => (time > hhmm(now) ? dayKey(now) : addDays(1, now));
+
+// ---------- Ricorrenze ----------
+const DAY_SHORT = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
+const parseDay = (s) => new Date(`${s}T12:00:00`);
+
+// Giorno successivo a "from" (escluso) secondo la regola
+export function nextDue(rep, from) {
+  const d = parseDay(from);
+  const n = Math.max(1, rep.n || 1);
+  if (rep.every === 'day') d.setDate(d.getDate() + n);
+  else if (rep.every === 'week' && rep.days?.length) {
+    do d.setDate(d.getDate() + 1); while (!rep.days.includes(d.getDay()));
+  } else if (rep.every === 'week') d.setDate(d.getDate() + 7 * n);
+  else {
+    const day = parseDay(from).getDate();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + n);
+    d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()));
+  }
+  return dayKey(d);
+}
+
+// Prima volta valida a partire da oggi (se l'orario di oggi è già passato, la successiva)
+export function firstDue(rep, time, now = new Date()) {
+  const today = dayKey(now);
+  const ok = (k) => !(rep.every === 'week' && rep.days?.length && !rep.days.includes(parseDay(k).getDay()));
+  let k = today;
+  if (!ok(k) || (time && time <= hhmm(now))) k = rep.every === 'week' && rep.days?.length ? nextDue(rep, today) : nextDue({ every: 'day', n: 1 }, today);
+  while (!ok(k)) k = nextDue({ every: 'day', n: 1 }, k);
+  return k;
+}
+
+// Dopo aver fatto la volta del giorno "done": la prossima, mai prima di oggi
+export function advance(rep, done, now = new Date()) {
+  let k = nextDue(rep, done);
+  const today = dayKey(now);
+  while (k < today) k = nextDue(rep, k);
+  return k;
+}
+
+// Le prossime volte (date) da "from" fino a "until" (ms), per programmarle in anticipo
+export function occurrences(it, untilMs) {
+  const out = [];
+  let k = it.due;
+  for (let i = 0; k && i < 40; i++) {
+    const at = remindAt({ ...it, due: k });
+    if (at == null || at > untilMs) break;
+    out.push({ due: k, at });
+    if (!it.repeat) break;
+    k = nextDue(it.repeat, k);
+  }
+  return out;
+}
+
+export function repeatLabel(rep) {
+  if (!rep) return '';
+  const n = rep.n > 1 ? rep.n : 0;
+  if (rep.every === 'day') return n ? `Ogni ${n} giorni` : 'Ogni giorno';
+  if (rep.every === 'month') return n ? `Ogni ${n} mesi` : 'Ogni mese';
+  const d = [...(rep.days || [])].sort();
+  if (d.join() === '1,2,3,4,5') return 'Lun–ven';
+  if (d.join() === '0,6') return 'Weekend';
+  if (d.length === 1) return `Ogni ${['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'][d[0]]}`;
+  if (d.length) return [...d.filter((x) => x), ...d.filter((x) => !x)].map((x) => DAY_SHORT[x]).join(', ');
+  return n ? `Ogni ${n} settimane` : 'Ogni settimana';
+}
+export const sameRepeat = (a, b) => JSON.stringify(a || null) === JSON.stringify(b || null);
 
 const WORD = { un: 1, uno: 1, una: 1, due: 2, tre: 3, quattro: 4, cinque: 5, sei: 6, sette: 7, otto: 8, nove: 9, dieci: 10, undici: 11, dodici: 12, quindici: 15, venti: 20, trenta: 30, quaranta: 40, cinquanta: 50 };
 const num = (s) => (/^\d+$/.test(s) ? +s : WORD[s.toLowerCase()] ?? null);
@@ -53,6 +121,28 @@ export function parseWhen(raw, now = new Date()) {
   let evening = /\b(stasera|stanotte)\b/i.test(t);
   const wants = new RegExp(`\\b${REMIND_VERB}\\b`, 'i').test(t);
   const cut = (re, fn) => { t = t.replace(re, (...m) => { fn(...m); return ' '; }); };
+  let repeat = null;
+  let partDefault = null;
+  const dayIdx = (w) => DAYS.indexOf(w.toLowerCase().replace('ì', 'i'));
+  const WD = String.raw`luned[iì]|marted[iì]|mercoled[iì]|gioved[iì]|venerd[iì]|sabato|domenica`;
+
+  // ricorrenze: "ogni giorno", "tutte le mattine", "ogni 2 giorni", "ogni lunedì e giovedì", "dal lunedì al venerdì", "ogni mese"
+  cut(/\s(?:dal\s+luned[iì]\s+al\s+venerd[iì]|(?:nei|tutti\s+i|ogni)\s+giorn[oi]\s+feriali?|nei\s+feriali)(?=[\s,.!?])/iu, () => { repeat = { every: 'week', n: 1, days: [1, 2, 3, 4, 5] }; });
+  cut(/\s(?:nel|ogni|tutti\s+i)\s+(?:weekend|fine\s+settimana)(?=[\s,.!?])/iu, () => { repeat = { every: 'week', n: 1, days: [0, 6] }; });
+  // "il lunedì porto la carta" in italiano vuol dire tutti i lunedì (ma "entro il lunedì" no)
+  cut(new RegExp(`(?<!\\b(?:entro|per|da|fino\\s+a))\\s(?:ogni|tutti\\s+i|tutte\\s+le|il|la)\\s+((?:${WD})(?:\\s*(?:,|e)\\s*(?:il\\s+|la\\s+)?(?:${WD}))*)(?=[\\s,.!?])`, 'iu'), (m, list) => {
+    repeat = { every: 'week', n: 1, days: [...new Set(list.match(new RegExp(WD, 'giu')).map(dayIdx))] };
+  });
+  cut(/\s(?:ogni|tutt[ie]\s+(?:i|le))\s+(mattin[ae]|ser[ae]|nott[ie]|giorn[oi]|di|santo\s+giorno)(?=[\s,.!?])|\s(?:quotidianamente|giornalmente|una\s+volta\s+al\s+giorno)(?=[\s,.!?])/iu, (m, w = '') => {
+    repeat = { every: 'day', n: 1, days: null };
+    if (/^mattin/i.test(w)) partDefault = '08:00';
+    if (/^(ser|nott)/i.test(w)) { partDefault = '20:00'; evening = true; }
+  });
+  cut(/\sogni\s+(\d+|due|tre|quattro|cinque|sei|sette|dieci|quindici|venti|trenta)\s+(giorn[oi]|settiman[ae]|mes[ei])(?=[\s,.!?])/iu, (m, k, u) => {
+    repeat = { every: /^g/i.test(u) ? 'day' : /^s/i.test(u) ? 'week' : 'month', n: num(k) || 1, days: null };
+  });
+  cut(/\s(?:ogni\s+settimana|settimanalmente|una\s+volta\s+a(?:lla)?\s+settimana)(?=[\s,.!?])/iu, () => { repeat = { every: 'week', n: 1, days: null }; });
+  cut(/\s(?:ogni\s+mese|mensilmente|una\s+volta\s+al\s+mese)(?=[\s,.!?])/iu, () => { repeat = { every: 'month', n: 1, days: null }; });
 
   // anticipo: "avvisami mezz'ora prima", "30 minuti prima", "con un'ora di anticipo"
   cut(new RegExp(`\\s(?:e\\s+)?(?:${REMIND_VERB}\\s+)?(?:con\\s+)?${AMOUNT}\\s+(?:prima|di\\s+anticipo)\\b`, 'iu'), (m, a) => { lead = minutes(a); });
@@ -92,11 +182,17 @@ export function parseWhen(raw, now = new Date()) {
   // "alle 9" detto dopo "stasera": correggi a 21
   if (time && evening && +time.slice(0, 2) < 12) time = `${+time.slice(0, 2) + 12}:${time.slice(3)}`;
 
+  if (repeat && !time && partDefault) time = partDefault;
   if (inMin != null) ({ due, time } = fromNow(inMin, now));
-  else if (time && !due) due = dayFor(time, now);
+  else if (repeat) {
+    // "ogni settimana" parte dal giorno detto (o da oggi) e si ripete in quel giorno
+    if (repeat.every === 'week' && !repeat.days?.length && due) repeat.days = [parseDay(due).getDay()];
+    due = due || firstDue(repeat, time, now);
+  } else if (time && !due) due = dayFor(time, now);
 
-  // "tra 20 minuti…" è quasi sempre un "avvisami": l'avviso parte anche senza chiederlo
-  let remind = lead != null ? lead : (wants && time) || inMin != null ? 0 : null;
+  // "tra 20 minuti…" è quasi sempre un "avvisami": l'avviso parte anche senza chiederlo.
+  // Una ricorrenza con orario ("ogni giorno alle 8 la pasticca") è un promemoria: avvisa all'ora
+  let remind = lead != null ? lead : (wants && time) || inMin != null || (repeat && time) ? 0 : null;
   if (remind == null && wants && due) { time = time || '09:00'; remind = 0; }
   if (remind != null && !time) { time = '09:00'; due = due || dayFor(time, now); }
 
@@ -105,5 +201,5 @@ export function parseWhen(raw, now = new Date()) {
   t = t.replace(/\s+/g, ' ').trim().replace(/^[,.;:]\s*/, '').replace(/[,;:]\s*$/, '');
   for (let i = 0; i < 3; i++) t = t.replace(/^(?:devo|dovrei|bisogna|ricordati\s+di|ricordarsi\s+di|di|che|e)\s+/i, '');
   if (t) t = t[0].toUpperCase() + t.slice(1);
-  return { text: t, due, time, remind };
+  return { text: t, due, time, remind, repeat };
 }

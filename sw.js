@@ -58,13 +58,19 @@ self.addEventListener('fetch', (e) => {
 });
 
 // Tocco su un promemoria: riapri MyList (o portala in primo piano)
+// Tasto "Fatto": la app (aperta o da aprire) spunta la voce
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  const url = e.notification.data?.url || './';
+  const { url = './', done } = e.notification.data || {};
+  const isDone = e.action === 'done' && done;
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       const win = list.find((c) => c.url.startsWith(self.registration.scope));
-      return win ? win.focus() : self.clients.openWindow(url);
+      if (win) {
+        if (isDone) win.postMessage({ done });
+        return win.focus();
+      }
+      return self.clients.openWindow(isDone ? `${url}?done=${encodeURIComponent(done)}` : url);
     })
   );
 });

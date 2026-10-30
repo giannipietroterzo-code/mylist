@@ -5,6 +5,7 @@ i[class^=fi-rr-]:before,i[class*=" fi-rr-"]:before{font-family:uicons-regular-ro
 .fi-rr-angle-small-left:before{content:"\f154"}
 .fi-rr-apps:before{content:"\f16c"}
 .fi-rr-arrow-small-up:before{content:"\f19f"}
+.fi-rr-arrows-repeat:before{content:"\f1c4"}
 .fi-rr-baby:before{content:"\f1e4"}
 .fi-rr-bell:before{content:"\f239"}
 .fi-rr-bolt:before{content:"\f26c"}

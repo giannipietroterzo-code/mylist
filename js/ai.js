@@ -48,12 +48,18 @@ function extractJSON(text) {
 // minuti dal JSON del modello: numero intero o null
 const mins = (v) => (v == null || v === '' || !Number.isFinite(+v) ? null : Math.round(+v));
 
+function cleanRepeat(r) {
+  if (!r || !['day', 'week', 'month'].includes(r.every)) return null;
+  const days = Array.isArray(r.days) ? [...new Set(r.days.map(Number).filter((d) => d >= 0 && d <= 6))] : [];
+  return { every: r.every, n: Math.max(1, mins(r.n) || 1), days: r.every === 'week' && days.length ? days : null };
+}
+
 const fmtDate = (d) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 // lists: [{ name, examples: [testi di voci già presenti] }] — gli esempi aiutano a capire a cosa serve ogni lista
 // todo: [{ text, list }] voci ancora da fare, numerate nel prompt: l'AI indica quali risultano già fatte
-// Risultato: { items: [{ text, list, due, time, in, remind }], done: [indici in todo] }
+// Risultato: { items: [{ text, list, due, time, in, remind, repeat }], done: [indici in todo] }
 export async function organize(text, lists, settings, { openList, fallback, todo = [] }) {
   const now = new Date();
   const hm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -90,10 +96,11 @@ Come scrivere le voci:
 4. "time": orario HH:MM (24 ore) se viene indicato un'ora precisa ("alle 16" → "16:00", "alle 4 del pomeriggio" → "16:00", "stasera alle 9" → "21:00", "a mezzogiorno" → "12:00"), altrimenti null. Se c'è l'orario ma non il giorno, lascia "due" null: lo calcola l'app.
 5. "in": se il momento è relativo ("tra 20 minuti" → 20, "fra un'ora" → 60, "tra un quarto d'ora" → 15) metti i minuti da adesso e lascia "due" e "time" null; altrimenti null.
 6. "remind": l'utente vuole essere AVVISATO? Metti quanti minuti PRIMA del momento indicato ("avvisami mezz'ora prima" → 30, "un'ora prima" → 60, "il giorno prima" → 1440, "avvisami alle 16" o "ricordami tra 20 minuti" → 0). Con "in" l'avviso è sempre implicito: 0. Se chiede di essere avvisato per un giorno senza orario ("ricordami domani di…") metti "time" "09:00" e "remind" 0. Se non chiede un avviso: null. "Ricordami di X" senza nessun giorno né orario NON è un avviso: null.
-Togli sempre dal testo le indicazioni di giorno, orario e avviso ("domani", "alle 16", "avvisami mezz'ora prima", "tra 20 minuti").
+7. "repeat": se è una cosa che si ripete ("ogni giorno", "tutte le sere", "il lunedì", "ogni lunedì e giovedì", "dal lunedì al venerdì", "ogni 2 giorni", "ogni mese") metti {"every":"day"|"week"|"month","n":1,"days":null}. Per giorni precisi della settimana usa "week" con "days" (0=domenica, 1=lunedì … 6=sabato), es. lunedì e giovedì → {"every":"week","n":1,"days":[1,4]}; "ogni 2 giorni" → {"every":"day","n":2,"days":null}. "due" = la prima volta (se non è chiaro lascia null). Una ricorrenza con un orario ("ogni giorno alle 8 prendere la pasticca") è un promemoria: "remind" 0 se non viene indicato un anticipo. "ogni mattina" senza orario → "08:00", "ogni sera" → "20:00". Altrimenti "repeat" null.
+Togli sempre dal testo le indicazioni di giorno, orario, ricorrenza e avviso ("domani", "alle 16", "avvisami mezz'ora prima", "tra 20 minuti").
 
 Rispondi SOLO con JSON valido, senza altro testo:
-{"items":[{"text":"...","list":"...","due":null,"time":null,"in":null,"remind":null}],"done":[]}`;
+{"items":[{"text":"...","list":"...","due":null,"time":null,"in":null,"remind":null,"repeat":null}],"done":[]}`;
 
   const { text: out } = await chat(settings, [
     { role: 'system', content: system },
@@ -109,6 +116,7 @@ Rispondi SOLO con JSON valido, senza altro testo:
       time: /^\d{1,2}:\d{2}$/.test(i.time || '') ? i.time.padStart(5, '0') : null,
       in: mins(i.in) > 0 ? mins(i.in) : null,
       remind: mins(i.remind) != null && mins(i.remind) >= 0 ? mins(i.remind) : null,
+      repeat: cleanRepeat(i.repeat),
     }));
   const done = [...new Set((Array.isArray(obj.done) ? obj.done : [])
     .map((n) => parseInt(n, 10) - 1)

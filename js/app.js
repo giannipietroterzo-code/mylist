@@ -8,7 +8,7 @@ import { voiceSupported, listen } from './voice.js';
 const PAUSE_MS = { short: 900, normal: 1500, long: 2500 };
 const VERSION = window.MYLIST_VERSION || '';
 import { aiReady, organize, testConnection, listModels } from './ai.js';
-import { dayKey, addDays, hhmm, parseWhen, remindAt, fromNow, dayFor } from './when.js';
+import { dayKey, addDays, hhmm, parseWhen, remindAt, fromNow, dayFor, firstDue, advance, repeatLabel, sameRepeat } from './when.js';
 import { initReminders, settle, notifySupported, notifyPermission, askNotify, newTopic, ntfyLink, sendTest } from './reminders.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -71,7 +71,7 @@ function parseQuick(raw, fallbackListId) {
     return m;
   });
   const w = parseWhen(text);
-  return { text: w.text, listId, due: w.due, time: w.time, remind: w.remind };
+  return { text: w.text, listId, due: w.due, time: w.time, remind: w.remind, repeat: w.repeat };
 }
 
 // ---------- "Ho preso le patate" → spunta "Prendere le patate" (anche senza AI) ----------
@@ -114,6 +114,21 @@ function findDoneLocally(text) {
   return [...ids];
 }
 
+// Completa una voce. Le ricorrenti non finiscono tra le completate: passano alla volta successiva.
+// Restituisce la prossima scadenza (ricorrente) o null
+function complete(it, doneDue = it.due) {
+  if (it.repeat && it.due) {
+    it.due = advance(it.repeat, doneDue > it.due ? doneDue : it.due);
+    it.fired = null;
+    ui.fresh.add(it.id);
+    return it.due;
+  }
+  it.done = true;
+  it.doneAt = Date.now();
+  return null;
+}
+const nextMsg = (it) => `Fatto · prossima ${dueLabel(it.due, it.time).text.replace(/^In ritardo$/, '').toLowerCase() || it.due}`;
+
 // reveal: dopo una dettatura apre la lista dove è finita la nota e la evidenzia
 // done: id di voci già esistenti da spuntare ("ho preso le patate")
 function addItems(entries, { reveal = false, done = [] } = {}) {
@@ -122,7 +137,7 @@ function addItems(entries, { reveal = false, done = [] } = {}) {
   const added = [];
   entries.forEach((e, i) => {
     if (!e.text) return;
-    const it = { id: uid(), text: e.text, listId: e.listId || fallbackList().id, done: false, due: e.due || null, time: e.time || null, remind: e.remind ?? null, createdAt: now - i };
+    const it = { id: uid(), text: e.text, listId: e.listId || fallbackList().id, done: false, due: e.due || null, time: e.time || null, remind: e.remind ?? null, repeat: e.repeat || null, createdAt: now - i };
     settle(it);
     data.items.push(it);
     ui.fresh.add(it.id);
@@ -157,7 +172,7 @@ function addItems(entries, { reveal = false, done = [] } = {}) {
     fin.forEach((el) => el.classList.add('completing'));
     setTimeout(() => {
       if (undone) return;
-      finishing.forEach((it) => { it.done = true; it.doneAt = Date.now(); });
+      finishing.forEach((it) => complete(it));
       saveData();
       if (!fin.length) return render();
       fin.forEach((el, i) => collapseThen(el, i ? () => {} : render));
@@ -170,8 +185,19 @@ function addItems(entries, { reveal = false, done = [] } = {}) {
     : added.length === 1 ? `Aggiunta in ${listOf(added[0]).name}` : `${added.length} voci → ${lists.join(', ')}`;
   if (bell.length) nudgeNotify();
   const doneMsg = !finishing.length ? ''
-    : finishing.length === 1 ? (added.length ? '1 completata' : `Fatto: ${finishing[0].text}`) : `${finishing.length} completate`;
+    : finishing.length === 1 ? (added.length ? '1 completata' : finishing[0].repeat ? `Fatto: ${finishing[0].text} · si ripete` : `Fatto: ${finishing[0].text}`) : `${finishing.length} completate`;
   toast([addMsg, doneMsg].filter(Boolean).join(' · '), 'Annulla', undo);
+}
+
+// "Fatto" toccato su una notifica (ntfy o MyList): id della voce e giorno di quella volta
+function remoteDone(id, due) {
+  const it = data.items.find((i) => i.id === id);
+  if (!it || it.done || (it.repeat && due && it.due > due)) return; // già fatta (o già passata alla volta dopo)
+  const restore = snapshot();
+  const next = complete(it, due || it.due);
+  saveData();
+  render();
+  toast(next ? `Dalla notifica: ${it.text} · prossima ${dueLabel(it.due, it.time).text.toLowerCase()}` : `Fatto dalla notifica: ${it.text}`, 'Annulla', () => { restore(); render(); });
 }
 
 // Primo promemoria senza un canale per gli avvisi: dopo la conferma, proponi di attivarli
@@ -237,9 +263,16 @@ async function smartAdd(text, { viaVoice = false } = {}) {
       }
       // "tra 20 minuti" → orario esatto; orario senza giorno → oggi o domani; avviso senza orario → alle 9
       let { due, time } = r.in ? fromNow(r.in) : r;
-      if (r.remind != null && !time) time = '09:00';
+      let remind = r.remind;
+      const repeat = r.in ? null : r.repeat;
+      if (repeat) {
+        if (repeat.every === 'week' && !repeat.days && due) repeat.days = [new Date(due + 'T12:00:00').getDay()];
+        due = due || firstDue(repeat, time);
+        if (time && remind == null) remind = 0;
+      }
+      if (remind != null && !time) time = '09:00';
       if (time && !due) due = dayFor(time);
-      return { text: r.text, listId: (l || targetList()).id, due, time, remind: r.remind };
+      return { text: r.text, listId: (l || targetList()).id, due, time, remind, repeat };
     });
     addItems(entries, { reveal: viaVoice, done: res.done.map((n) => todo[n].id) });
   } catch (err) {
@@ -296,6 +329,7 @@ function itemHTML(it, showList) {
   const meta = [
     showList ? `<span class="tag" style="${cv(l.color)}">${listIcon(l)}${esc(l.name)}</span>` : '',
     due && !it.done ? `<span class="tag due ${due.cls}">${icon(it.time ? 'clock' : 'calendar')}${due.text}</span>` : '',
+    it.repeat && !it.done ? `<span class="tag rep">${icon('repeat')}${repeatLabel(it.repeat)}</span>` : '',
     at && !it.done ? `<span class="tag bell ${it.fired === at ? 'past' : ''}" title="Avviso">${icon('bell')}${it.remind ? fmtTime(at) : ''}</span>` : '',
   ].join('');
   return `<li class="item ${it.done ? 'is-done' : ''} ${ui.fresh.has(it.id) ? 'pop' : ''}" data-id="${it.id}" style="${cv(l.color)}">
@@ -386,11 +420,10 @@ function toggleDone(id) {
     buzz(15);
     el?.classList.add('completing');
     setTimeout(() => {
-      it.done = true;
-      it.doneAt = Date.now();
+      const next = complete(it);
       saveData();
       collapseThen(el, render);
-      toast('Fatto!', 'Annulla', () => { restore(); render(); });
+      toast(next ? nextMsg(it) : 'Fatto!', 'Annulla', () => { restore(); render(); });
     }, 380);
   } else {
     it.done = false;
@@ -491,12 +524,12 @@ function toggleDoneImmediate(id) {
   const it = data.items.find((i) => i.id === id);
   if (!it) return;
   const restore = snapshot();
-  it.done = !it.done;
-  it.doneAt = it.done ? Date.now() : null;
+  let next = null;
+  if (it.done) { it.done = false; it.doneAt = null; } else next = complete(it);
   saveData();
   buzz(15);
   collapseThen(document.querySelector(`.item[data-id="${id}"]`), render);
-  toast(it.done ? 'Fatto!' : 'Di nuovo da fare', 'Annulla', () => { restore(); render(); });
+  toast(next ? nextMsg(it) : it.done ? 'Fatto!' : 'Di nuovo da fare', 'Annulla', () => { restore(); render(); });
 }
 
 // ---------- Toast ----------
@@ -558,6 +591,7 @@ sheet.addEventListener('cancel', (e) => { e.preventDefault(); closeSheet(); });
 })();
 
 // ---------- Modifica voce ----------
+const REPEAT_OPTS = [[null, 'Mai'], [{ every: 'day', n: 1, days: null }, 'Ogni giorno'], [{ every: 'week', n: 1, days: [1, 2, 3, 4, 5] }, 'Lun–ven'], [{ every: 'week', n: 1, days: null }, 'Ogni settimana'], [{ every: 'month', n: 1, days: null }, 'Ogni mese']];
 const REMIND_OPTS = [[null, 'Nessun avviso'], [0, "All'ora"], [10, '10 min prima'], [30, '30 min prima'], [60, '1 ora prima'], [1440, '1 giorno prima']];
 function editItem(id) {
   const it = data.items.find((i) => i.id === id);
@@ -575,12 +609,18 @@ function editItem(id) {
       <label class="chip soft date ${it.due && !dueOpts.some(([, v]) => v === it.due) ? 'on' : ''}">${icon('calendar')}<span>${it.due && !dueOpts.some(([, v]) => v === it.due) ? dueLabel(it.due).text : 'Data…'}</span><input type="date" id="eDate" value="${it.due || ''}"></label>
       ${it.due ? `<button class="chip soft" data-due="">${icon('x')}Nessuna</button>` : ''}
     </div>
-    <label class="lbl">Orario e avviso</label>
+    <label class="lbl">Orario</label>
     <div class="row wrap" id="eTimeRow">
       <label class="chip soft date ${it.time ? 'on' : ''}">${icon('clock')}<span>${it.time || 'Orario…'}</span><input type="time" id="eTime" value="${it.time || ''}"></label>
       ${it.time ? `<button class="chip soft" data-time="">${icon('x')}Nessuno</button>` : ''}
     </div>
-    <div class="row wrap top-gap-s" id="eRemind">
+    <label class="lbl">Ripeti</label>
+    <div class="row wrap" id="eRepeat">
+      ${REPEAT_OPTS.map(([v, t]) => `<button class="chip soft ${sameRepeat(it.repeat, v) ? 'on' : ''}" data-rep='${JSON.stringify(v)}'>${v ? icon('repeat') : ''}${t}</button>`).join('')}
+      ${it.repeat && !REPEAT_OPTS.some(([v]) => sameRepeat(it.repeat, v)) ? `<button class="chip soft on" data-rep='${JSON.stringify(it.repeat)}'>${icon('repeat')}${repeatLabel(it.repeat)}</button>` : ''}
+    </div>
+    <label class="lbl">Avviso</label>
+    <div class="row wrap" id="eRemind">
       ${REMIND_OPTS.map(([v, t]) => `<button class="chip soft ${(it.remind ?? null) === v ? 'on' : ''}" data-remind="${v ?? ''}">${v == null ? '' : icon('bell')}${t}</button>`).join('')}
     </div>
     ${remindAt(it) ? `<p class="muted small">${icon('bell')} Avviso ${dueLabel(dayKey(new Date(remindAt(it)))).text.replace(/ \d.*/, '').toLowerCase()} alle ${fmtTime(remindAt(it))}${settings.ntfyTopic ? '' : ' · arriva se MyList è aperta o in background (per averlo sempre: Impostazioni → Promemoria)'}</p>` : ''}
@@ -603,7 +643,7 @@ function editItem(id) {
       const b = e.target.closest('[data-due]');
       if (!b) return;
       it.due = b.dataset.due || null;
-      if (!it.due) { it.time = null; it.remind = null; }
+      if (!it.due) { it.time = null; it.remind = null; it.repeat = null; }
       settle(it);
       commit();
       editItem(id);
@@ -619,6 +659,19 @@ function editItem(id) {
     };
     $('#eTime', root).addEventListener('change', (e) => setTime(e.target.value));
     $('#eTimeRow', root).addEventListener('click', (e) => { if (e.target.closest('[data-time]')) setTime(''); });
+    $('#eRepeat', root).addEventListener('click', (e) => {
+      const b = e.target.closest('[data-rep]');
+      if (!b) return;
+      it.repeat = JSON.parse(b.dataset.rep);
+      if (it.repeat) {
+        // "ogni settimana" = nello stesso giorno della scadenza
+        if (it.repeat.every === 'week' && !it.repeat.days) it.repeat = { ...it.repeat, days: [new Date((it.due || dayKey(new Date())) + 'T12:00:00').getDay()] };
+        if (!it.due) it.due = firstDue(it.repeat, it.time);
+      }
+      settle(it);
+      commit();
+      editItem(id);
+    });
     $('#eRemind', root).addEventListener('click', (e) => {
       const b = e.target.closest('[data-remind]');
       if (!b) return;
@@ -779,7 +832,8 @@ function ntfyBox() {
       <li><span>Controlla che arrivi</span><button class="pill-btn ghost small-btn" id="sNtfyTest">${icon('send')}Prova</button></li>
     </ol>
     <p class="status small" id="sNtfyStatus"></p>
-    <p class="muted small">Canale privato: <code>${esc(t)}</code><br>Il testo dei promemoria passa dal server ntfy.sh, che lo consegna al telefono (si programma fino a 3 giorni prima; gli avvisi più lontani partono alle aperture successive di MyList). In ntfy attiva la <i>consegna istantanea</i> per non avere ritardi.</p>`;
+    <p class="muted small">Canale privato: <code>${esc(t)}</code><br>Il testo dei promemoria passa dal server ntfy.sh, che lo consegna al telefono (si programma fino a 3 giorni prima; gli avvisi più lontani partono alle aperture successive di MyList). In ntfy attiva la <i>consegna istantanea</i> per non avere ritardi.</p>
+    <p class="muted small">${icon('bell')} Sulla notifica trovi <b>Fatto</b> e <b>+10 min</b>: funzionano senza aprire MyList. I "Fatto" vengono spuntati qui quando riapri l'app (entro 12 ore).</p>`;
 }
 function bindReminderSettings(root) {
   const bindNotify = () => $('#sNotify', root)?.addEventListener('click', async () => {
@@ -885,6 +939,7 @@ function openSettings() {
         <li><code>#spesa</code> manda la voce nella lista Spesa</li>
         <li><i>oggi</i>, <i>domani</i>, <i>venerdì</i>, <i>il 5 novembre</i> impostano la scadenza</li>
         <li><i>alle 16</i>, <i>tra 20 minuti</i>, <i>avvisami mezz'ora prima</i> impostano orario e avviso</li>
+        <li><i>ogni giorno alle 8</i>, <i>il lunedì</i>, <i>dal lunedì al venerdì</i> la fanno ripetere</li>
         <li>Scorri a destra ${icon('check')} per completare, a sinistra ${icon('trash')} per eliminare</li>
         <li>Tieni premuta l'icona dell'app sul telefono → <b>Detta</b> per dettare al volo</li>
       </ul>
@@ -1244,6 +1299,7 @@ function switchView(view) {
 function handleLaunchParams() {
   const p = new URLSearchParams(location.search);
   const shared = [p.get('title'), p.get('text'), p.get('url')].filter(Boolean).join(' ').trim();
+  if (p.get('done')) setTimeout(() => remoteDone(...p.get('done').split('|')), 300);
   if (p.has('voice')) setTimeout(startVoice, 300);
   else if (p.has('new')) setTimeout(() => $('#newText').focus(), 300);
   else if (shared) {
@@ -1265,10 +1321,17 @@ setInterval(() => {
 }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
 // Avviso arrivato con l'app aperta: vibra e mostralo, con "Fatto" a portata di dito
-initReminders((it, late) => {
-  navigator.vibrate?.([200, 100, 200]);
-  render();
-  toast(`${late ? 'Era alle' : 'Promemoria ·'} ${late ? fmtTime(remindAt(it)) + ': ' : ''}${it.text}`, 'Fatto', () => toggleDoneImmediate(it.id));
+initReminders({
+  fire: (it, late) => {
+    navigator.vibrate?.([200, 100, 200]);
+    render();
+    toast(`${late ? 'Era alle' : 'Promemoria ·'} ${late ? fmtTime(remindAt(it)) + ': ' : ''}${it.text}`, 'Fatto', () => toggleDoneImmediate(it.id));
+  },
+  remoteDone,
+});
+// Tasto "Fatto" sulla notifica di MyList (arriva dal service worker)
+navigator.serviceWorker?.addEventListener('message', (e) => {
+  if (e.data?.done) remoteDone(...e.data.done.split('|'));
 });
 
 // Aggiornamenti: appena il nuovo service worker prende il controllo ricarica la pagina
