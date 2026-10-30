@@ -7,7 +7,7 @@ import { voiceSupported, listen } from './voice.js';
 
 const PAUSE_MS = { short: 900, normal: 1500, long: 2500 };
 const VERSION = window.MYLIST_VERSION || '';
-import { aiReady, organize, testConnection, listModels } from './ai.js';
+import { aiReady, aiSource, chromeAI, detectChromeAI, downloadChromeAI, organize, answer, makeTitle, testConnection, listModels } from './ai.js';
 import { dayKey, addDays, hhmm, parseWhen, remindAt, fromNow, dayFor, firstDue, advance, repeatLabel, sameRepeat } from './when.js';
 import { chime, primeSound } from './sound.js';
 import { initReminders, settle, notifySupported, notifyPermission, askNotify, newTopic, ntfyLink, sendTest } from './reminders.js';
@@ -25,6 +25,7 @@ const fallbackList = () => data.lists[0];
 const listOf = (item) => listById(item.listId) || fallbackList();
 const openCount = (listId) => data.items.filter((i) => !i.done && (!listId || listOf(i).id === listId)).length;
 const currentList = () => (settings.view === 'all' ? null : listById(settings.view));
+const inNotes = () => settings.view === 'notes';
 const targetList = () => currentList() || listById(settings.target) || fallbackList();
 // Colore del testo leggibile sopra il colore della lista (scuro sui gialli, bianco sui grigi scuri)
 function ink(hex) {
@@ -73,6 +74,39 @@ function parseQuick(raw, fallbackListId) {
   });
   const w = parseWhen(text);
   return { text: w.text, listId, due: w.due, time: w.time, remind: w.remind, repeat: w.repeat };
+}
+
+// ---------- Appunti senza AI: "prendi nota…", "appunto:", "annota che…", "segna che…" ----------
+const NOTE_HEAD = /^\s*(?:(?:ok|allora)[\s,]+)?(?:prendi(?:\s+un)?\s+(?:nota|appunt[oi])|prendere\s+nota|appunto|annota(?:mi|re)?|nota(?:\s+bene)?|memo|segna(?:ti)?\s+che|scrivi\s+che|ricorda\s+che|idea)\b[\s,:.\-]*(?:che\s+|di\s+)?/iu;
+const cap = (t) => (t ? t[0].toUpperCase() + t.slice(1) : t);
+// null = non è un appunto
+function localNote(text, force = false) {
+  const t = text.trim();
+  if (!force && !NOTE_HEAD.test(t)) return null;
+  const body = cap(t.replace(NOTE_HEAD, '').trim()) || cap(t);
+  // "idea: …" → l'idea resta riconoscibile dal titolo
+  return { title: /^\s*(?:(?:ok|allora)[\s,]+)?idea\b/i.test(t) ? 'Idea' : '', text: body };
+}
+// Il titolo lo scrive l'AI in base al contenuto (finché non lo scrivi tu); si rifà se cambi il testo
+async function autoTitle(n) {
+  if (n.userTitle || !aiReady(settings) || n.titleFor === n.text || !n.text.trim()) return;
+  const text = n.text;
+  try {
+    const t = await makeTitle(text, settings);
+    if (!t || n.userTitle || n.text !== text) return;
+    n.title = t;
+    n.titleFor = text;
+    saveData();
+    if ($('#nTitle')?.dataset.id === n.id) $('#nTitle').value = t;
+    renderMain();
+  } catch (err) { console.warn('titolo', err); }
+}
+const noteTitle = (n) => n.title || n.text.split(/\n|[.!?](?:\s|$)/)[0].slice(0, 60);
+function noteDate(ms) {
+  const d = new Date(ms);
+  if (dayKey(d) === dayKey(new Date())) return `Oggi ${hhmm(d)}`;
+  if (dayKey(d) === addDays(-1)) return `Ieri ${hhmm(d)}`;
+  return d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
 // ---------- "Ho preso le patate" → spunta "Prendere le patate" (anche senza AI) ----------
@@ -132,7 +166,8 @@ const nextMsg = (it) => `Fatto · prossima ${dueLabel(it.due, it.time).text.repl
 
 // reveal: dopo una dettatura apre la lista dove è finita la nota e la evidenzia
 // done: id di voci già esistenti da spuntare ("ho preso le patate")
-function addItems(entries, { reveal = false, done = [] } = {}) {
+// notes: appunti da salvare nella sezione Note
+function addItems(entries, { reveal = false, done = [], notes = [] } = {}) {
   const restore = snapshot();
   const now = Date.now();
   const added = [];
@@ -145,17 +180,21 @@ function addItems(entries, { reveal = false, done = [] } = {}) {
     added.push(it);
   });
   const finishing = done.map((id) => data.items.find((i) => i.id === id && !i.done)).filter(Boolean);
-  if (!added.length && !finishing.length) return;
-  if (added.length) saveData();
+  const noted = notes.filter((n) => n.text).map((n, i) => ({ id: uid(), title: n.title || '', titleFor: n.title ? n.text : null, text: n.text, createdAt: now - i, updatedAt: now - i }));
+  data.notes.unshift(...noted);
+  noted.forEach((n) => { ui.fresh.add(n.id); autoTitle(n); });
+  if (!added.length && !finishing.length && !noted.length) return;
+  if (added.length || noted.length) saveData();
   if (reveal) {
     const ids = [...new Set([...added, ...finishing].map((a) => listOf(a).id))];
-    const view = ids.length === 1 ? ids[0] : 'all';
+    // solo appunti → apri le Note; altrimenti la lista dove sono finite le voci
+    const view = !ids.length ? 'notes' : ids.length === 1 ? ids[0] : 'all';
     if (settings.view !== view) {
       settings.view = view;
-      if (view !== 'all') settings.target = view;
+      if (view !== 'all' && view !== 'notes') settings.target = view;
       saveSettings();
     }
-    ui.search = '';
+    clearSearch();
   }
   render();
   buzz(12);
@@ -163,7 +202,7 @@ function addItems(entries, { reveal = false, done = [] } = {}) {
   const undo = () => { undone = true; restore(); render(); };
   requestAnimationFrame(() => {
     const find = (arr) => arr.map((a) => document.querySelector(`.item[data-id="${a.id}"]`)).filter(Boolean);
-    const els = reveal ? find(added) : [];
+    const els = reveal ? find(added.length ? added : noted) : [];
     const fin = find(finishing);
     if (reveal) (els[0] || fin[0])?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     els.forEach((el) => el.classList.add('flash'));
@@ -187,7 +226,8 @@ function addItems(entries, { reveal = false, done = [] } = {}) {
   if (bell.length) nudgeNotify();
   const doneMsg = !finishing.length ? ''
     : finishing.length === 1 ? (added.length ? '1 completata' : finishing[0].repeat ? `Fatto: ${finishing[0].text} · si ripete` : `Fatto: ${finishing[0].text}`) : `${finishing.length} completate`;
-  toast([addMsg, doneMsg].filter(Boolean).join(' · '), 'Annulla', undo);
+  const noteMsg = !noted.length ? '' : noted.length === 1 ? (added.length || finishing.length ? '1 appunto' : 'Appunto salvato nelle Note') : `${noted.length} appunti`;
+  toast([addMsg, doneMsg, noteMsg].filter(Boolean).join(' · '), 'Annulla', undo);
 }
 
 // "Fatto" toccato su una notifica (ntfy o MyList): id della voce e giorno di quella volta
@@ -230,6 +270,10 @@ async function smartAdd(text, { viaVoice = false } = {}) {
   const useAI = aiReady(settings) && (settings.aiMode === 'always' || (settings.aiMode === 'voice' && viaVoice));
   // Se l'utente ha usato #lista esplicitamente, non serve l'AI
   if (!useAI || /\s?#[\p{L}]/u.test(text)) {
+    const sq = /#/.test(text) ? null : localSearch(text);
+    if (sq) return startSearch(sq, null, { viaVoice });
+    const note = /#/.test(text) ? null : localNote(text, inNotes());
+    if (note) return addItems([], { notes: [note], reveal: viaVoice });
     const done = /#/.test(text) ? null : findDoneLocally(text);
     if (done?.length) addItems([], { done, reveal: viaVoice });
     else if (done) notFound(text, viaVoice);
@@ -251,8 +295,10 @@ async function smartAdd(text, { viaVoice = false } = {}) {
       openList: currentList()?.name,
       fallback: targetList().name,
       todo: todo.map((i) => ({ text: i.text.slice(0, 80), list: listOf(i).name })),
+      inNotes: inNotes(),
     });
-    if (!res.items.length && !res.done.length) {
+    if (res.search) return startSearch(res.search.query, res.search.keywords, { viaVoice });
+    if (!res.items.length && !res.done.length && !res.notes.length) {
       if (looksDone(text)) return notFound(text, viaVoice);
       throw new Error('Nessuna voce trovata');
     }
@@ -275,13 +321,17 @@ async function smartAdd(text, { viaVoice = false } = {}) {
       if (time && !due) due = dayFor(time);
       return { text: r.text, listId: (l || targetList()).id, due, time, remind, repeat };
     });
-    addItems(entries, { reveal: viaVoice, done: res.done.map((n) => todo[n].id) });
+    addItems(entries, { reveal: viaVoice, done: res.done.map((n) => todo[n].id), notes: res.notes });
   } catch (err) {
     console.warn(err);
-    const done = findDoneLocally(text);
-    if (done?.length) addItems([], { done, reveal: viaVoice });
+    const sq = localSearch(text);
+    if (sq) return startSearch(sq, null, { viaVoice });
+    const note = localNote(text, inNotes());
+    const done = note ? null : findDoneLocally(text);
+    if (note) addItems([], { notes: [note], reveal: viaVoice });
+    else if (done?.length) addItems([], { done, reveal: viaVoice });
     else addItems([parseQuick(text, targetList().id)], { reveal: viaVoice });
-    toast(`AI non disponibile: ${done?.length ? 'spuntata col riconoscimento locale' : "aggiunta così com'è"} (${err.message})`);
+    toast(`AI non disponibile: ${note ? 'appunto salvato così com\'è' : done?.length ? 'spuntata col riconoscimento locale' : "aggiunta così com'è"} (${err.message})`);
   } finally {
     composer.classList.remove('thinking');
     updateGoButton();
@@ -299,13 +349,18 @@ function render() {
 function renderHeader() {
   const l = currentList();
   const searching = !!ui.search.trim();
-  const title = searching ? 'Risultati' : l ? `<span class="t-ico" style="${cv(l.color)}">${listIcon(l)}</span><span class="t-txt">${esc(l.name)}</span>` : '<span class="t-txt">Tutte</span>';
+  const notes = inNotes() && !searching;
+  const title = searching ? 'Risultati' : notes ? `<span class="t-ico">${icon('notes')}</span><span class="t-txt">Note</span>`
+    : l ? `<span class="t-ico" style="${cv(l.color)}">${listIcon(l)}</span><span class="t-txt">${esc(l.name)}</span>` : '<span class="t-txt">Tutte</span>';
   $('#viewTitle').innerHTML = `${title}${VERSION ? `<span class="ver">v${VERSION}</span>` : ''}`;
   const n = openCount(l?.id);
   const today = new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
-  $('#viewSub').textContent = `${n ? (n === 1 ? '1 cosa da fare' : `${n} cose da fare`) : 'Tutto fatto'} · ${today}`;
+  const nn = data.notes.length;
+  $('#viewSub').textContent = notes
+    ? `${nn ? (nn === 1 ? '1 appunto' : `${nn} appunti`) : 'Nessun appunto'} · ${today}`
+    : `${n ? (n === 1 ? '1 cosa da fare' : `${n} cose da fare`) : 'Tutto fatto'} · ${today}`;
   $('#btnEditList').hidden = !l;
-  $('#btnGroup').hidden = !!l || searching;
+  $('#btnGroup').hidden = !!l || searching || notes;
   $('#btnGroup').innerHTML = icon(settings.grouped ? 'group' : 'flat');
   $('#btnGroup').setAttribute('aria-label', settings.grouped ? 'Vista a elenco unico' : 'Raggruppa per lista');
   document.documentElement.style.setProperty('--list', l ? l.color : 'var(--accent)');
@@ -319,7 +374,9 @@ function renderChips() {
     return `<button class="chip ${settings.view === l.id ? 'on' : ''}" data-view="${l.id}" style="${cv(l.color)}">
       ${listIcon(l, 'chip-emo')}${esc(l.name)}${n ? ` <b>${n}</b>` : ''}</button>`;
   }).join('');
-  chips.innerHTML = all + ls + `<button class="chip add" id="chipAdd" aria-label="Nuova lista">${icon('plus')}</button>`;
+  const nn = data.notes.length;
+  const notes = `<button class="chip notes ${inNotes() ? 'on' : ''}" data-view="notes">${icon('notes', 'chip-emo')}Note${nn ? ` <b>${nn}</b>` : ''}</button>`;
+  chips.innerHTML = all + notes + ls + `<button class="chip add" id="chipAdd" aria-label="Nuova lista">${icon('plus')}</button>`;
   chips.querySelector('.chip.on')?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
 }
 
@@ -350,32 +407,147 @@ function emptyHTML() {
   const lines = l
     ? [listIcon(l), `Niente in ${esc(l.name)}`, 'Scrivi qui sotto o tocca il microfono']
     : [icon('coffee'), 'Niente da fare', 'Goditi il momento, oppure detta la prossima idea'];
-  if (ui.search.trim()) return `<div class="empty"><div class="empty-emo">${icon('search')}</div><h2>Nessun risultato</h2><p>Prova con un'altra parola</p></div>`;
+  if (ui.search.trim()) return `<div class="empty"><div class="empty-emo">${icon('search')}</div><h2>Non ho trovato niente</h2><p>Nessuna voce o appunto su «${esc(ui.search.trim())}»</p></div>`;
   return `<div class="empty"><div class="empty-emo">${lines[0]}</div><h2>${lines[1]}</h2><p>${lines[2]}</p></div>`;
+}
+
+function noteHTML(n) {
+  return `<li class="item note ${ui.fresh.has(n.id) ? 'pop' : ''}" data-id="${n.id}" data-kind="note">
+    <div class="swipe-bg"><span class="sw-l"></span><span class="sw-r">${icon('trash')}</span></div>
+    <div class="item-body">
+      <div class="item-main" data-note>
+        <div class="note-title">${esc(noteTitle(n))}</div>
+        ${n.title || n.text.length > noteTitle(n).length + 2 ? `<div class="note-text">${esc(n.text)}</div>` : ''}
+        <div class="meta"><span class="tag due">${icon('notes')}${noteDate(n.updatedAt || n.createdAt)}</span></div>
+      </div>
+    </div>
+  </li>`;
+}
+
+function renderNotes() {
+  const notes = [...data.notes].sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
+  $('#main').innerHTML = notes.length
+    ? `<ul class="items notes">${notes.map(noteHTML).join('')}</ul>`
+    : `<div class="empty"><div class="empty-emo">${icon('notes')}</div><h2>Nessun appunto</h2><p>Detta o scrivi qui sotto: idee, informazioni, cose da ricordare.<br>Da qualsiasi lista basta iniziare con <i>"prendi nota…"</i></p></div>`;
+  ui.fresh.clear();
+}
+
+// ---------- Ricerca (a voce: "cerca il nome della clinica…") ----------
+// ui.search = la domanda; ui.terms = parole chiave e sinonimi suggeriti dall'AI (se c'è)
+function searchResults() {
+  const q = norm(ui.search);
+  const terms = ui.terms?.length ? ui.terms.map(norm) : words(ui.search);
+  const sc = (txt) => {
+    if (!terms.length) return norm(txt).includes(q) ? 1 : 0;
+    const t = norm(txt);
+    const ws = new Set(words(txt).map(stem));
+    return terms.reduce((n, k) => n + (k.includes(' ') ? (t.includes(k) ? 2 : 0) : ws.has(stem(k)) || t.includes(k) ? 1 : 0), 0);
+  };
+  const rank = (arr, txt) => arr.map((x) => [x, sc(txt(x))]).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).map(([x]) => x);
+  return {
+    items: rank(data.items, (i) => `${i.text} ${listOf(i).name}`),
+    notes: rank(data.notes, (n) => `${n.title} ${n.text}`),
+  };
+}
+function clearSearch() {
+  ui.search = '';
+  ui.terms = null;
+  ui.answer = null;
+  ui.searchToken = null;
+  $('#searchBox').hidden = true;
+  $('#searchInput').value = '';
+}
+function closeSearch() { clearSearch(); render(); }
+
+async function startSearch(query, keywords = null, { viaVoice = false } = {}) {
+  ui.search = query;
+  ui.terms = keywords?.length ? keywords : null;
+  ui.answer = null;
+  $('#searchBox').hidden = false;
+  $('#searchInput').value = query;
+  render();
+  window.scrollTo({ top: 0 });
+  buzz(8);
+  if (!aiReady(settings)) return;
+  // l'AI legge solo i risultati migliori e risponde in una frase
+  const { items, notes } = searchResults();
+  const docs = [
+    ...notes.slice(0, 6).map((n) => ({ kind: 'appunto', ref: { type: 'note', id: n.id }, text: `${n.title ? n.title + ': ' : ''}${n.text}`.slice(0, 700) })),
+    ...items.slice(0, 6).map((i) => ({ kind: i.done ? 'voce completata' : `voce in ${listOf(i).name}`, ref: { type: 'item', id: i.id }, text: `${i.text}${i.due ? ` (${dueLabel(i.due, i.time).text})` : ''}` })),
+  ];
+  if (!docs.length) return;
+  const token = (ui.searchToken = {});
+  ui.answer = { loading: true };
+  renderMain();
+  try {
+    const a = await answer(query, docs, settings);
+    if (ui.searchToken !== token) return;
+    ui.answer = a ? { text: a.text, ref: a.source != null ? docs[a.source].ref : null } : null;
+    renderMain();
+    if (a && viaVoice) speak(a.text);
+  } catch (err) {
+    if (ui.searchToken !== token) return;
+    ui.answer = null;
+    renderMain();
+  }
+}
+// Hai chiesto a voce? Allora la risposta te la leggo
+function speak(text) {
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = settings.lang;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  } catch (err) { /* sintesi vocale non disponibile */ }
+}
+// "cerca…", "trova…", "dov'è…", "qual era…", "come si chiama…" (senza AI)
+const SEARCH_HEAD = /^\s*(?:(?:ok|allora|ehi)[\s,]+)?(?:cerca(?:mi)?|trova(?:mi)?|ricerca|mostra(?:mi)?|fammi\s+vedere|dov['’]?\s*è|dove\s+(?:ho\s+(?:messo|scritto|segnato|annotato)|sta|si\s+trova)|qual\s+(?:è|era)|com['’]?\s*era|come\s+si\s+chiama(?:va)?)\b[\s,:]*/iu;
+function localSearch(text) {
+  const t = text.trim();
+  if (!SEARCH_HEAD.test(t)) return null;
+  return t.replace(SEARCH_HEAD, '').replace(/[?.!]+$/, '').trim() || t;
 }
 
 function renderMain() {
   const q = norm(ui.search);
+  if (inNotes() && !q) return renderNotes();
   let items = data.items;
-  if (q) items = items.filter((i) => norm(i.text).includes(q));
+  let ns = [];
+  if (q) ({ items, notes: ns } = searchResults());
   else if (settings.view !== 'all') items = items.filter((i) => listOf(i).id === settings.view);
 
-  const open = sortOpen(items.filter((i) => !i.done));
+  // in ricerca l'ordine è per pertinenza, altrimenti per scadenza
+  const open = q ? items.filter((i) => !i.done) : sortOpen(items.filter((i) => !i.done));
   const done = items.filter((i) => i.done).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
   const isAll = settings.view === 'all' || q;
   let html = '';
 
-  if (!open.length) html += emptyHTML();
+  if (q && ui.answer) {
+    // un tocco sulla risposta apre l'appunto (o la voce) da cui viene
+    const ref = !ui.answer.loading && ui.answer.ref;
+    const src = ref && (ref.type === 'note' ? data.notes.find((n) => n.id === ref.id) : data.items.find((i) => i.id === ref.id));
+    html += `<${src ? 'button' : 'div'} class="answer ${ui.answer.loading ? 'loading' : ''}" ${src ? `data-ref="${ref.type}:${ref.id}"` : ''}>
+      <span class="answer-ico">${icon('sparkles')}</span>
+      <span class="answer-body">${ui.answer.loading ? 'Cerco tra le tue cose…' : esc(ui.answer.text)}
+        ${src ? `<span class="answer-src">${icon(ref.type === 'note' ? 'notes' : 'check')}<span>${esc(ref.type === 'note' ? noteTitle(src) : src.text)}</span>${icon('chevron')}</span>` : ''}
+      </span>
+    </${src ? 'button' : 'div'}>`;
+  }
+  if (!open.length && !ns.length) html += emptyHTML();
   else if (isAll && settings.grouped && !q) {
     for (const l of data.lists) {
       const its = open.filter((i) => listOf(i).id === l.id);
       if (!its.length) continue;
       html += `<section class="group" style="${cv(l.color)}">
-        <button class="group-h" data-view="${l.id}"><span class="g-emo">${listIcon(l)}</span>${esc(l.name)}<span class="g-n">${its.length}</span></button>
+        <button class="group-h" data-view="${l.id}"><span class="g-emo">${listIcon(l)}</span>${esc(l.name)}</button>
         <ul class="items">${its.map((i) => itemHTML(i, false)).join('')}</ul></section>`;
     }
-  } else {
+  } else if (open.length) {
     html += `<ul class="items">${open.map((i) => itemHTML(i, isAll)).join('')}</ul>`;
+  }
+  // in ricerca compaiono anche gli appunti
+  if (ns.length) {
+    html += `<section class="group search-notes"><div class="group-h"><span class="g-emo">${icon('notes')}</span>Note</div><ul class="items notes">${ns.map(noteHTML).join('')}</ul></section>`;
   }
 
   if (done.length) {
@@ -398,6 +570,14 @@ function renderComposer() {
   btn.style.setProperty('--c', t.color);
   btn.style.setProperty('--on', ink(t.color));
   const ai = aiReady(settings) && settings.aiMode === 'always';
+  if (inNotes()) {
+    btn.innerHTML = icon('notes');
+    btn.style.setProperty('--c', 'var(--accent)');
+    btn.style.setProperty('--on', 'var(--on-accent)');
+    btn.title = 'Gli appunti finiscono nelle Note';
+    $('#newText').placeholder = 'Scrivi un appunto…';
+    return updateGoButton();
+  }
   btn.title = ai ? `Se non serve altro, finisce in ${t.name}` : `Aggiungi in ${t.name}`;
   $('#newText').placeholder = ai ? 'Scrivi una nota, la smisto io…' : `Aggiungi in ${t.name}…`;
   updateGoButton();
@@ -445,6 +625,15 @@ function deleteItem(id) {
 }
 
 
+function deleteNote(id) {
+  const restore = snapshot();
+  data.notes = data.notes.filter((n) => n.id !== id);
+  saveData();
+  collapseThen(document.querySelector(`.item[data-id="${id}"]`), render);
+  buzz(10);
+  toast('Appunto eliminato', 'Annulla', () => { restore(); render(); });
+}
+
 // Animazione di chiusura riga prima del re-render
 function collapseThen(el, fn) {
   if (!el) return fn();
@@ -488,10 +677,12 @@ function setupSwipe() {
       if (dt > 0) sw.v = 0.7 * ((e.clientX - sw.x) / dt) + 0.3 * sw.v;
       sw.t = e.timeStamp;
       sw.x = e.clientX;
-      sw.dx = dx;
-      sw.body.style.transform = `translateX(${dx}px)`;
-      sw.li.dataset.dir = dx > 0 ? 'right' : 'left';
-      const armed = Math.abs(dx) > TH;
+      // gli appunti si scorrono solo a sinistra (elimina): non c'è niente da completare
+      const d = sw.li.dataset.kind === 'note' ? Math.min(dx, 0) : dx;
+      sw.dx = d;
+      sw.body.style.transform = `translateX(${d}px)`;
+      sw.li.dataset.dir = d > 0 ? 'right' : 'left';
+      const armed = Math.abs(d) > TH;
       if (armed !== sw.li.classList.contains('armed')) { buzz(5); sw.li.classList.toggle('armed', armed); }
     }
   });
@@ -503,12 +694,13 @@ function setupSwipe() {
     ui.suppressClick = true;
     setTimeout(() => (ui.suppressClick = false), 80);
     li.classList.remove('swiping');
-    const flick = Math.abs(v) > FLICK && Math.abs(dx) > FLICK_MIN && Math.sign(v) === Math.sign(dx);
+    const flick = dx !== 0 && Math.abs(v) > FLICK && Math.abs(dx) > FLICK_MIN && Math.sign(v) === Math.sign(dx);
     if (Math.abs(dx) > TH || flick) {
       body.style.transition = 'transform .2s ease';
       body.style.transform = `translateX(${dx > 0 ? 110 : -110}%)`;
       const id = li.dataset.id;
-      setTimeout(() => (dx > 0 ? toggleDoneImmediate(id) : deleteItem(id)), 180);
+      const note = li.dataset.kind === 'note';
+      setTimeout(() => (note ? deleteNote(id) : dx > 0 ? toggleDoneImmediate(id) : deleteItem(id)), 180);
     } else {
       body.style.transition = 'transform .25s cubic-bezier(.2,.9,.3,1.2)';
       body.style.transform = '';
@@ -625,12 +817,25 @@ function editItem(id) {
       ${REMIND_OPTS.map(([v, t]) => `<button class="chip soft ${(it.remind ?? null) === v ? 'on' : ''}" data-remind="${v ?? ''}">${v == null ? '' : icon('bell')}${t}</button>`).join('')}
     </div>
     ${remindAt(it) ? `<p class="muted small">${icon('bell')} Avviso ${dueLabel(dayKey(new Date(remindAt(it)))).text.replace(/ \d.*/, '').toLowerCase()} alle ${fmtTime(remindAt(it))}${settings.ntfyTopic ? '' : ' · arriva se MyList è aperta o in background (per averlo sempre: Impostazioni → Promemoria)'}</p>` : ''}
+    <button class="link-btn top-gap" id="eToNote">${icon('notes')}Non è una cosa da fare: spostala nelle Note</button>
     <div class="row top-gap">
       <button class="pill-btn danger ghost grow" id="eDel">${icon('trash')}Elimina</button>
       <button class="pill-btn grow" data-close>Fatto</button>
     </div>
   `, (root) => {
     const commit = () => { saveData(); render(); };
+    $('#eToNote', root).addEventListener('click', () => {
+      const now = Date.now();
+      data.items = data.items.filter((i) => i.id !== id);
+      const note = { id: it.id, title: '', text: it.text, createdAt: it.createdAt || now, updatedAt: now };
+      data.notes.unshift(note);
+      ui.fresh.add(it.id);
+      autoTitle(note);
+      saveData();
+      closeSheet();
+      render();
+      toast('Spostata nelle Note', 'Annulla', () => { restore(); render(); });
+    });
     const ta = $('#eText', root);
     ta.addEventListener('input', () => { it.text = ta.value.replace(/\n/g, ' '); commit(); });
     $('#eList', root).addEventListener('click', (e) => {
@@ -691,6 +896,61 @@ function editItem(id) {
       render();
       toast('Voce eliminata', 'Annulla', () => { restore(); render(); });
     });
+  });
+}
+
+// ---------- Appunto ----------
+function editNote(id) {
+  const n = data.notes.find((x) => x.id === id);
+  if (!n) return;
+  const restore = snapshot();
+  const created = new Date(n.createdAt).toLocaleString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+  openSheet(`
+    <div class="sheet-head"><h2>Appunto</h2><button class="icon-btn" data-close aria-label="Chiudi">${icon('x')}</button></div>
+    <input id="nTitle" data-id="${n.id}" class="field note-title-field" placeholder="${aiReady(settings) ? 'Titolo (lo scrive l\'AI)' : 'Titolo'}" value="${esc(n.title)}" autocomplete="off">
+    <textarea id="nText" class="field note-body" placeholder="Scrivi o detta qui il tuo appunto…">${esc(n.text)}</textarea>
+    <p class="muted small">${icon('notes')} Creato ${created}${n.updatedAt && n.updatedAt - n.createdAt > 60000 ? ` · modificato ${noteDate(n.updatedAt).toLowerCase()}` : ''}</p>
+    <div class="row wrap">
+      <button class="pill-btn ghost" id="nCopy">${icon('copy')}Copia</button>
+      ${navigator.share ? `<button class="pill-btn ghost" id="nShare">${icon('share')}Condividi</button>` : ''}
+    </div>
+    <button class="link-btn top-gap" id="nToItem">${icon('check')}È una cosa da fare: spostalo in ${esc(targetList().name)}</button>
+    <div class="row top-gap">
+      <button class="pill-btn danger ghost grow" id="nDel">${icon('trash')}Elimina</button>
+      <button class="pill-btn grow" data-close>Fatto</button>
+    </div>
+  `, (root) => {
+    const ta = $('#nText', root);
+    const fit = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight + 2, innerHeight * 0.5) + 'px'; };
+    fit();
+    const commit = () => { n.updatedAt = Date.now(); saveData(); renderHeader(); renderChips(); renderMain(); };
+    ta.addEventListener('input', () => { n.text = ta.value; fit(); commit(); });
+    // scrivi tu il titolo → l'AI non lo tocca più; cancellalo → torna a scriverlo lei
+    $('#nTitle', root).addEventListener('input', (e) => { n.title = e.target.value.trim(); n.userTitle = !!n.title; n.titleFor = null; commit(); });
+    sheet.addEventListener('close', () => { if (data.notes.includes(n)) autoTitle(n); }, { once: true });
+    if (!n.title) autoTitle(n);
+    const full = () => (n.title ? `${n.title}\n\n${n.text}` : n.text);
+    $('#nCopy', root).onclick = async () => {
+      try { await navigator.clipboard.writeText(full()); toast('Copiato'); } catch (err) { toast('Copia non riuscita'); }
+    };
+    $('#nShare', root)?.addEventListener('click', () => navigator.share({ title: n.title || 'Appunto', text: full() }).catch(() => {}));
+    $('#nToItem', root).onclick = () => {
+      const now = Date.now();
+      data.notes = data.notes.filter((x) => x.id !== id);
+      data.items.push({ id: n.id, text: n.text.replace(/\s*\n+\s*/g, ' ').trim() || n.title, listId: targetList().id, done: false, due: null, createdAt: now });
+      ui.fresh.add(n.id);
+      saveData();
+      closeSheet();
+      render();
+      toast(`Spostato in ${targetList().name}`, 'Annulla', () => { restore(); render(); });
+    };
+    $('#nDel', root).onclick = () => {
+      closeSheet();
+      data.notes = data.notes.filter((x) => x.id !== id);
+      saveData();
+      render();
+      toast('Appunto eliminato', 'Annulla', () => { restore(); render(); });
+    };
   });
 }
 
@@ -816,6 +1076,37 @@ function manageLists() {
   });
 }
 
+// ---------- Impostazioni: IA di Chrome ----------
+function chromeAIBox() {
+  const st = chromeAI.state;
+  const used = aiSource(settings) === 'chrome';
+  const line = (cls, ico, html) => `<p class="ai-status ${cls}">${icon(ico)}<span>${html}</span></p>`;
+  if (st === 'available') {
+    return line('ok', 'check', used
+      ? '<b>Pronta e in uso</b>: gratis e sul dispositivo. Con una chiave OpenRouter i risultati sono migliori.'
+      : '<b>Pronta</b>: entra in gioco se OpenRouter non risponde.');
+  }
+  if (st === 'downloadable') return `${line('', 'download', "Questo dispositivo può usarla: va scaricata una volta (qualche GB, meglio col Wi-Fi).")}<button class="pill-btn wide ghost" id="sChromeDl">${icon('download')}Scarica l'IA di Chrome</button>`;
+  if (st === 'downloading') return line('', 'download', `Download in corso… ${Math.round(chromeAI.progress * 100)}%`);
+  if (st === 'unavailable') return line('muted', 'warn', 'Questo dispositivo non ha i requisiti (servono molta memoria e spazio libero).');
+  return line('muted', 'warn', "Non presente in questo browser: per ora c'è solo su Chrome per computer, su Android non ancora. Quando Google la attiverà, MyList la userà da sola.");
+}
+function bindChromeAI(root) {
+  $('#sChromeDl', root)?.addEventListener('click', async () => {
+    const box = $('#sChromeAI', root);
+    try {
+      await downloadChromeAI(() => { box.innerHTML = chromeAIBox(); });
+      toast('IA di Chrome pronta');
+    } catch (err) {
+      await detectChromeAI();
+      toast(`Download non riuscito: ${err.message}`);
+    }
+    box.innerHTML = chromeAIBox();
+    $('#sTest', root).disabled = !aiReady(settings);
+    render();
+  });
+}
+
 // ---------- Impostazioni: promemoria ----------
 function notifyRow() {
   const p = notifyPermission();
@@ -882,7 +1173,6 @@ function bindReminderSettings(root) {
 // ---------- Impostazioni ----------
 function openSettings() {
   const seg = (name, val, opts) => `<div class="seg" data-seg="${name}">${opts.map(([v, t]) => `<button class="${val === v ? 'on' : ''}" data-v="${v}">${t}</button>`).join('')}</div>`;
-  const hasKey = !!settings.apiKey;
   openSheet(`
     <div class="sheet-head"><h2>Impostazioni</h2><button class="icon-btn" data-close aria-label="Chiudi">${icon('x')}</button></div>
 
@@ -905,7 +1195,10 @@ function openSettings() {
       ${seg('aiMode', settings.aiMode, [['always', 'Sempre'], ['voice', 'Solo dettatura'], ['off', 'Mai']])}
       <p class="muted small">L'AI capisce la nota e dove vuoi metterla ("mettilo nel lavoro", "per casa"…). Se non lo dici, sceglie lei la lista più adatta.</p>
 
-      <button class="pill-btn wide ghost top-gap" id="sTest" ${hasKey ? '' : 'disabled'}>${icon('bolt')}Prova connessione</button>
+      <label class="lbl">IA di Chrome (senza chiave)</label>
+      <div id="sChromeAI">${chromeAIBox()}</div>
+
+      <button class="pill-btn wide ghost top-gap" id="sTest" ${aiReady(settings) ? '' : 'disabled'}>${icon('bolt')}Prova connessione</button>
       <p class="status small" id="sStatus"></p>
     </section>
 
@@ -917,9 +1210,6 @@ function openSettings() {
       <label class="lbl">Pausa prima dell'invio automatico</label>
       ${seg('pause', settings.pause, [['short', 'Breve'], ['normal', 'Normale'], ['long', 'Lunga']])}
       <p class="muted small">Quando smetti di parlare la nota parte da sola. Se ti fermi a metà frase ("compra il latte e…") aspetto un po' di più.</p>
-      <label class="lbl">Quando apri MyList</label>
-      ${seg('autoListen', settings.autoListen, [['off', 'Mostra le liste'], ['open', 'Ascolta subito']])}
-      <p class="muted small">Con <b>Ascolta subito</b> basta dire <i>"Hey Google, apri MyList"</i> e poi la nota: MyList si apre già in ascolto (anche quando la riapri dopo almeno 30 secondi). Se non ti serve, tocca Annulla.</p>
       ${voiceSupported ? '' : `<p class="muted small">${icon('warn')} Questo browser non supporta la dettatura: usa Chrome su Android, oppure il microfono della tastiera.</p>`}
     </section>
 
@@ -942,7 +1232,7 @@ function openSettings() {
 
     <section class="card">
       <h3>${icon('eye')}Aspetto</h3>
-      ${seg('theme', settings.theme, [['auto', 'Automatico'], ['light', 'Chiaro'], ['dark', 'Scuro']])}
+      ${seg('theme', settings.theme, [['auto', 'Auto'], ['light', 'Chiaro'], ['medium', 'Medio'], ['dark', 'Scuro']])}
     </section>
 
     <section class="card">
@@ -958,6 +1248,8 @@ function openSettings() {
         <li><i>oggi</i>, <i>domani</i>, <i>venerdì</i>, <i>il 5 novembre</i> impostano la scadenza</li>
         <li><i>alle 16</i>, <i>tra 20 minuti</i>, <i>avvisami mezz'ora prima</i> impostano orario e avviso</li>
         <li><i>ogni giorno alle 8</i>, <i>il lunedì</i>, <i>dal lunedì al venerdì</i> la fanno ripetere</li>
+        <li><i>cerca…</i>, <i>trova…</i>, <i>qual era…</i> cercano tra voci e appunti (con l'AI ti risponde anche)</li>
+        <li><i>prendi nota…</i>, <i>appunto…</i>, <i>segna che…</i> salvano un appunto nelle Note (con l'AI lo capisce anche da solo)</li>
         <li>Scorri a destra ${icon('check')} per completare, a sinistra ${icon('trash')} per eliminare</li>
         <li>Tieni premuta l'icona dell'app sul telefono → <b>Detta</b> per dettare al volo</li>
       </ul>
@@ -979,7 +1271,9 @@ function openSettings() {
       settings.apiKey = key.value.trim();
       saveSettings();
       renderComposer();
-      $('#sTest', root).disabled = !settings.apiKey;
+      $('#sTest', root).disabled = !aiReady(settings);
+      $('#sChromeAI', root).innerHTML = chromeAIBox();
+      bindChromeAI(root);
     });
     $('#sKeyShow', root).onclick = () => { key.type = key.type === 'password' ? 'text' : 'password'; };
     $('#sModel', root).onclick = () => openModelPicker();
@@ -1009,6 +1303,7 @@ function openSettings() {
     };
     $('#sLists', root).onclick = manageLists;
     bindReminderSettings(root);
+    bindChromeAI(root);
     $('#sChime', root).onclick = () => chime(settings.alertLevel !== 'normal' ? 3 : 1);
     $('#sExport', root).onclick = exportData;
     $('#sImport', root).onclick = () => $('#importFile').click();
@@ -1111,7 +1406,7 @@ function applyTheme() {
   if (t === 'auto') delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = t;
   const dark = t === 'dark' || (t === 'auto' && mq.matches);
-  $('#metaTheme').content = dark ? '#1E1E1E' : '#F7F7F5'; // come la fascia dell'intestazione
+  $('#metaTheme').content = t === 'medium' ? '#373735' : dark ? '#1E1E1E' : '#F7F7F5'; // come la fascia dell'intestazione
 }
 mq.addEventListener('change', applyTheme);
 
@@ -1130,7 +1425,7 @@ function startVoice() {
   $('#voiceHint').textContent = 'Ti ascolto…';
   $('#voiceText').textContent = '';
   $('#voiceOrbIco').innerHTML = icon('mic');
-  $('#voiceTarget').innerHTML = aiReady(settings) && settings.aiMode !== 'off'
+  $('#voiceTarget').innerHTML = inNotes() ? `${icon('notes')} Detta il tuo appunto` : aiReady(settings) && settings.aiMode !== 'off'
     ? `${icon('sparkles')} L'AI smisterà nelle liste giuste`
     : `Finisce in <b>${listIcon(t)} ${esc(t.name)}</b>`;
   buzz(20);
@@ -1138,7 +1433,8 @@ function startVoice() {
   try {
     ui.voice = listen({
       lang: settings.lang,
-      pauseMs: PAUSE_MS[settings.pause] || PAUSE_MS.normal,
+      // per gli appunti si parla più a lungo e si fanno più pause: aspetta di più prima di chiudere
+      pauseMs: Math.max(PAUSE_MS[settings.pause] || PAUSE_MS.normal, inNotes() ? PAUSE_MS.long : 0),
       onText: (txt) => { $('#voiceText').textContent = txt; },
       // Conto alla rovescia visibile: quando la barra si svuota la nota parte da sola
       onPause: (ms) => {
@@ -1217,7 +1513,6 @@ $('#targetPicker').addEventListener('click', (e) => {
 
 // ---------- Eventi ----------
 function bind() {
-  $('#btnSearch').innerHTML = icon('search');
   $('#searchIco').innerHTML = icon('search');
   $('#btnSettings').innerHTML = icon('gear');
   $('#btnEditList').innerHTML = icon('pencil');
@@ -1227,13 +1522,17 @@ function bind() {
   $('#btnSettings').onclick = openSettings;
   $('#btnEditList').onclick = () => editList(settings.view);
   $('#btnGroup').onclick = () => { settings.grouped = !settings.grouped; saveSettings(); render(); };
-  $('#btnSearch').onclick = () => {
-    const box = $('#searchBox');
-    box.hidden = !box.hidden;
-    if (!box.hidden) $('#searchInput').focus();
-    else { ui.search = ''; $('#searchInput').value = ''; render(); }
-  };
-  $('#searchInput').addEventListener('input', (e) => { ui.search = e.target.value; render(); });
+  // la ricerca si apre a voce o scrivendo "cerca…"; qui si può affinare o chiudere
+  $('#searchClose').innerHTML = icon('x');
+  $('#searchClose').onclick = closeSearch;
+  $('#searchInput').addEventListener('input', (e) => {
+    ui.search = e.target.value;
+    ui.terms = null;
+    ui.answer = null;
+    ui.searchToken = null;
+    if (!ui.search.trim()) return closeSearch();
+    render();
+  });
 
   // Chip delle liste: tocco = apri, tocco sulla lista già aperta o pressione lunga = modifica
   let pressTimer;
@@ -1242,7 +1541,7 @@ function bind() {
   chips.addEventListener('pointerdown', (e) => {
     const c = e.target.closest('[data-view]');
     longPressed = false;
-    if (!c || c.dataset.view === 'all') return;
+    if (!c || c.dataset.view === 'all' || c.dataset.view === 'notes') return;
     pressTimer = setTimeout(() => { longPressed = true; buzz(20); editList(c.dataset.view); }, 550);
   });
   ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => chips.addEventListener(ev, () => clearTimeout(pressTimer)));
@@ -1253,7 +1552,7 @@ function bind() {
     if (e.target.closest('#chipAdd')) return editList(null);
     const c = e.target.closest('[data-view]');
     if (!c) return;
-    if (settings.view === c.dataset.view && c.dataset.view !== 'all') return editList(c.dataset.view);
+    if (settings.view === c.dataset.view && c.dataset.view !== 'all' && c.dataset.view !== 'notes') return editList(c.dataset.view);
     switchView(c.dataset.view);
   });
 
@@ -1262,6 +1561,12 @@ function bind() {
     const li = e.target.closest('.item');
     if (e.target.closest('.check') && li) return toggleDone(li.dataset.id);
     if (e.target.closest('[data-edit]') && li) return editItem(li.dataset.id);
+    if (e.target.closest('[data-note]') && li) return editNote(li.dataset.id);
+    const ans = e.target.closest('.answer[data-ref]');
+    if (ans) {
+      const [type, id] = ans.dataset.ref.split(':');
+      return type === 'note' ? editNote(id) : editItem(id);
+    }
     const gh = e.target.closest('.group-h');
     if (gh) return switchView(gh.dataset.view);
     if (e.target.closest('#doneToggle')) { settings.showDone = !settings.showDone; saveSettings(); return render(); }
@@ -1302,9 +1607,10 @@ function bind() {
 }
 
 function switchView(view) {
-  if (settings.view === view) return;
+  if (ui.search) clearSearch();
+  if (settings.view === view) return render();
   settings.view = view;
-  if (view !== 'all') settings.target = view;
+  if (view !== 'all' && view !== 'notes') settings.target = view;
   saveSettings();
   buzz(5);
   const main = $('#main');
@@ -1320,7 +1626,7 @@ function handleLaunchParams() {
   const p = new URLSearchParams(location.search);
   const shared = [p.get('title'), p.get('text'), p.get('url')].filter(Boolean).join(' ').trim();
   if (p.get('done')) setTimeout(() => remoteDone(...p.get('done').split('|')), 300);
-  if (p.has('voice') || (settings.autoListen === 'open' && !p.get('done') && !p.has('new') && !shared)) setTimeout(startVoice, 400);
+  if (p.has('voice')) setTimeout(startVoice, 400);
   else if (p.has('new')) setTimeout(() => $('#newText').focus(), 300);
   else if (shared) {
     $('#newText').value = shared;
@@ -1330,24 +1636,21 @@ function handleLaunchParams() {
   if (location.search) history.replaceState(null, '', location.pathname);
 }
 
-if (!listById(settings.view) && settings.view !== 'all') settings.view = 'all';
+if (!listById(settings.view) && settings.view !== 'all' && settings.view !== 'notes') settings.view = 'all';
 applyTheme();
 bind();
 render();
 handleLaunchParams();
-// "Apri già in ascolto": vale anche quando riapri MyList dopo un po' (dall'Assistente o dalle app recenti)
-let hiddenAt = 0;
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { hiddenAt = Date.now(); return; }
-  const idle = hiddenAt && Date.now() - hiddenAt > 30000;
-  if (settings.autoListen === 'open' && idle && $('#voice').hidden && !sheet.open && !$('#newText').value.trim()) setTimeout(startVoice, 400);
-});
 // Le etichette "Oggi 16:00" diventano "in ritardo" col passare del tempo: aggiorna ogni minuto (mai durante uno swipe)
 setInterval(() => {
   if (!document.hidden && !document.querySelector('.item.swiping, .item.collapse') && !$('#newText').matches(':focus')) renderMain();
 }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
 // Avviso arrivato con l'app aperta: vibra e mostralo, con "Fatto" a portata di dito
+// IA di Chrome: se il browser ce l'ha, fa da riserva quando manca la chiave OpenRouter
+detectChromeAI().then((st) => { if (st !== 'none') render(); });
+// Appunti senza titolo (salvati senza AI o prima di questa versione): l'AI glielo scrive con calma
+setTimeout(() => data.notes.filter((n) => !n.titleFor && !n.userTitle).slice(0, 20).forEach(autoTitle), 2500);
 primeSound();
 initReminders({
   fire: (it, late) => {

@@ -58,6 +58,24 @@
   color-scheme: dark;
 }
 
+/* Medio: grafite, a metà tra chiaro e scuro (meno abbagliante del chiaro, meno cupo dello scuro) */
+:root[data-theme="medium"] {
+  --bg: #2A2A28;
+  --surface: #373735;
+  --surface-2: #444442;
+  --surface-3: #52524F;
+  --text: #F5F5F2;
+  --text-2: #CBCBC6;
+  --text-3: #95958F;
+  --accent-ink: #FFD84D;
+  --ok: #D4D4D8;
+  --line: rgba(255, 255, 255, .08);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .25);
+  --shadow: 0 1px 3px rgba(0, 0, 0, .35);
+  --glass: #3C3C3A;
+  color-scheme: dark;
+}
+
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; }
 body {
@@ -558,3 +576,44 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 .howto .ico { font-size: 14px; }
 .howto ol { margin: 8px 0 6px; padding-left: 18px; display: grid; gap: 6px; }
 .howto p { margin: 0; color: var(--text-2); font-size: 12px; }
+
+/* ---------- Note ---------- */
+.chip.notes .chip-emo { color: var(--accent-ink); }
+.chip.notes.on { background: var(--text); color: var(--bg); }
+.chip.notes.on .chip-emo { color: var(--accent); }
+.chip.notes.on b { background: color-mix(in srgb, var(--bg) 18%, transparent); color: var(--bg); }
+.item.note .item-body { align-items: flex-start; padding: 14px 16px; border-left: 4px solid var(--accent); }
+.note-title { font-weight: 700; font-size: 16px; line-height: 1.3; word-wrap: break-word; }
+.note-text {
+  margin-top: 4px; font-size: 14.5px; line-height: 1.45; color: var(--text-2); white-space: pre-line; word-wrap: break-word;
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+}
+.note-title-field { font-weight: 700; font-size: 18px; }
+.note-body { margin-top: 10px; min-height: 160px; resize: none; line-height: 1.5; font-size: 16px; }
+.link-btn { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 4px; color: var(--text-2); font-size: 14px; text-align: left; }
+.link-btn .ico { font-size: 16px; color: var(--accent-ink); flex: none; }
+.search .search-x { display: grid; place-items: center; width: 32px; height: 32px; margin-right: -8px; border-radius: 50%; color: var(--text-2); }
+.search .search-x:active { background: var(--surface-2); }
+.search input::-webkit-search-cancel-button { display: none; }
+.answer { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; padding: 14px 16px; border-radius: var(--radius); background: color-mix(in srgb, var(--accent) 16%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); font-size: 16px; line-height: 1.4; animation: fadeUp .25s ease; }
+.answer .answer-ico { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--on-accent); }
+.answer .answer-ico .ico { font-size: 16px; }
+.answer.loading > div { color: var(--text-2); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .45; } }
+.search-notes { margin-top: 18px; }
+button.answer { width: 100%; text-align: left; cursor: pointer; transition: transform .12s; }
+button.answer:active { transform: scale(.99); }
+.answer-body { flex: 1; min-width: 0; }
+.answer.loading .answer-body { color: var(--text-2); animation: pulse 1.2s ease-in-out infinite; }
+.answer-src {
+  display: flex; align-items: center; gap: 6px; margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  font-size: 13.5px; font-weight: 600; color: var(--accent-ink);
+}
+.answer-src .ico { font-size: 14px; flex: none; }
+.answer-src > span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.answer-src .ico:last-child { transform: rotate(-90deg); }
+.ai-status { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 8px; font-size: 13.5px; line-height: 1.4; color: var(--text-2); }
+.ai-status .ico { font-size: 15px; margin-top: 1px; flex: none; color: var(--accent-ink); }
+.ai-status.ok .ico { color: #2F9E44; }
+.ai-status.muted .ico { color: var(--text-3); }

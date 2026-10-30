@@ -36,6 +36,8 @@ function defaultData() {
       { id: uid(), text: 'Scorri a destra per completare, a sinistra per eliminare', listId: 'inbox', done: false, due: null, createdAt: now - 1 },
       { id: uid(), text: 'Scrivi "latte #spesa" per mandarla dritta in una lista', listId: 'inbox', done: false, due: null, createdAt: now - 2 },
     ],
+    // appunti: { id, title, text, createdAt, updatedAt }
+    notes: [],
   };
 }
 
@@ -43,10 +45,9 @@ export const DEFAULT_SETTINGS = {
   apiKey: '',
   model: 'openrouter/auto',
   aiMode: 'always', // always | voice | off
-  theme: 'auto', // auto | light | dark
+  theme: 'auto', // auto | light | medium | dark
   lang: 'it-IT',
   pause: 'normal', // short | normal | long: silenzio prima dell'invio automatico
-  autoListen: 'off', // off | open: "Hey Google, apri MyList" → MyList si apre già in ascolto
   grouped: true,
   showDone: false,
   view: 'all',
@@ -66,6 +67,7 @@ function read(key, fallback) {
 
 export const data = read(DATA_KEY, defaultData);
 export const settings = { ...DEFAULT_SETTINGS, ...read(SET_KEY, () => ({})) };
+delete settings.autoListen; // opzione tolta: si usa la scorciatoia Detta sulla Home
 // v2: l'AI smista anche il testo scritto, non solo la dettatura
 if (/:batch$/.test(settings.model)) settings.model = settings.model.replace(/:batch$/, '');
 if ((settings.sv || 1) < 2) {
@@ -76,6 +78,7 @@ try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch (e) {}
 
 // Serve sempre almeno una lista; i colori della vecchia palette passano a giallo/grigio
 function normalize() {
+  if (!Array.isArray(data.notes)) data.notes = [];
   if (!data.lists.length) data.lists.push({ id: uid(), name: 'Inbox', icon: 'inbox-in', color: LIST_COLORS[0] });
   data.lists.forEach((l) => {
     if (!l.icon) l.icon = EMOJI_TO_ICON[l.emoji] || 'clipboard-list';
@@ -103,6 +106,7 @@ export function snapshot() {
     const prev = JSON.parse(copy);
     data.lists = prev.lists;
     data.items = prev.items;
+    data.notes = prev.notes || [];
     saveData();
   };
 }
@@ -111,6 +115,7 @@ export function replaceData(next) {
   if (!next || !Array.isArray(next.lists) || !Array.isArray(next.items)) throw new Error('File non valido');
   data.lists = next.lists;
   data.items = next.items;
+  data.notes = Array.isArray(next.notes) ? next.notes : [];
   normalize();
   saveData();
 }
@@ -119,6 +124,7 @@ export function resetAll() {
   const d = defaultData();
   data.lists = d.lists;
   data.items = d.items;
+  data.notes = d.notes;
   saveData();
 }
 

@@ -1,9 +1,69 @@
-// Integrazione OpenRouter: trasforma una frase libera in voci ordinate nelle liste giuste
+// Intelligenza artificiale di MyList: trasforma una frase libera in voci, appunti, ricerche.
+// Due motori, in quest'ordine:
+//  1. OpenRouter, se c'è una chiave (il migliore: modelli grandi, italiano ottimo)
+//  2. l'IA integrata in Chrome (Gemini Nano, gratis e sul dispositivo), se il browser ce l'ha.
+//     Oggi esiste solo su Chrome per computer con hardware adeguato; su Android non ancora:
+//     lì MyList usa le regole locali finché Google non la attiva.
 const API = 'https://openrouter.ai/api/v1';
 
-export const aiReady = (s) => !!(s.apiKey && s.apiKey.trim() && s.aiMode !== 'off');
+const hasKey = (s) => !!(s.apiKey && s.apiKey.trim());
+// stato dell'IA di Chrome: none (il browser non ce l'ha) | unavailable | downloadable | downloading | available
+export const chromeAI = { state: 'none', progress: 0 };
 
-async function chat(settings, messages, { timeout = 20000, maxTokens = 600 } = {}) {
+export async function detectChromeAI() {
+  try {
+    chromeAI.state = 'LanguageModel' in self ? await self.LanguageModel.availability() : 'none';
+  } catch (err) { chromeAI.state = 'unavailable'; }
+  return chromeAI.state;
+}
+
+// Il primo uso scarica il modello (serve un tocco dell'utente): onProgress(0..1)
+export async function downloadChromeAI(onProgress) {
+  chromeAI.state = 'downloading';
+  const session = await self.LanguageModel.create({
+    monitor(m) { m.addEventListener('downloadprogress', (e) => { chromeAI.progress = e.loaded; onProgress?.(e.loaded); }); },
+  });
+  session.destroy?.();
+  chromeAI.state = 'available';
+}
+
+// Quale motore risponde: 'openrouter' | 'chrome' | null
+export const aiSource = (s) => (s.aiMode === 'off' ? null : hasKey(s) ? 'openrouter' : chromeAI.state === 'available' ? 'chrome' : null);
+export const aiReady = (s) => !!aiSource(s);
+
+async function chat(settings, messages, opts = {}) {
+  if (aiSource(settings) === 'chrome') return chatChrome(messages, opts);
+  try {
+    return await chatOpenRouter(settings, messages, opts);
+  } catch (err) {
+    // OpenRouter non risponde (rete, credito, modello): se c'è, prova con l'IA di Chrome
+    if (chromeAI.state === 'available') return chatChrome(messages, opts);
+    throw err;
+  }
+}
+
+async function chatChrome(messages, { timeout = 20000 } = {}) {
+  const ctrl = new AbortController();
+  // il modello sul dispositivo è più lento: un po' più di pazienza
+  const t = setTimeout(() => ctrl.abort(), timeout * 2);
+  let session;
+  try {
+    const sys = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n');
+    const user = messages.filter((m) => m.role !== 'system').map((m) => m.content).join('\n\n');
+    session = await self.LanguageModel.create({ initialPrompts: sys ? [{ role: 'system', content: sys }] : [], signal: ctrl.signal });
+    const text = await session.prompt(user, { signal: ctrl.signal });
+    if (!text) throw new Error('Risposta vuota dall\'IA di Chrome');
+    return { text, model: 'IA di Chrome (Gemini Nano)' };
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('L\'IA di Chrome ci mette troppo, riprova');
+    throw e;
+  } finally {
+    clearTimeout(t);
+    session?.destroy?.();
+  }
+}
+
+async function chatOpenRouter(settings, messages, { timeout = 20000, maxTokens = 600 } = {}) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeout);
   try {
@@ -59,8 +119,8 @@ const fmtDate = (d) =>
 
 // lists: [{ name, examples: [testi di voci già presenti] }] — gli esempi aiutano a capire a cosa serve ogni lista
 // todo: [{ text, list }] voci ancora da fare, numerate nel prompt: l'AI indica quali risultano già fatte
-// Risultato: { items: [{ text, list, due, time, in, remind, repeat }], done: [indici in todo] }
-export async function organize(text, lists, settings, { openList, fallback, todo = [] }) {
+// Risultato: { items: [{ text, list, due, time, in, remind, repeat }], done: [indici in todo], notes: [{ title, text }], search: { query, keywords } | null }
+export async function organize(text, lists, settings, { openList, fallback, todo = [], inNotes = false }) {
   const now = new Date();
   const hm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   const day = now.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -82,6 +142,11 @@ ${todoLines || '(nessuna)'}
 
 COSE GIÀ FATTE: se l'utente dice di aver già fatto qualcosa ("ho preso le patate", "comprato il latte", "ho chiamato Marco", "fatto il bonifico", "la lavatrice è fatta", "spunta il pane"), NON creare una nuova voce: trova tra le voci da fare quella che corrisponde, anche se scritta con parole diverse ("ho preso le patate" = "Prendere le patate", "Comprare patate", "Patate"), e metti il suo numero in "done". Se nessuna voce corrisponde davvero, ignora quella parte (non inventare numeri). Una stessa nota può contenere sia cose fatte sia cose nuove da aggiungere.
 
+RICERCA: se l'utente vuole TROVARE o RICORDARE qualcosa che ha già salvato ("cerca il nome della clinica", "trova il codice del cancello", "dov'è il numero dell'idraulico", "qual era la password del wifi?", "come si chiamava il ristorante che mi hanno consigliato?", "mostrami le cose della spesa") NON creare voci né appunti: metti in "search" {"query": la domanda riformulata in breve, "keywords": 3-8 parole chiave in minuscolo, al singolare, comprese parole simili e sinonimi utili a trovarla (es. clinica → ["clinica","ospedale","veterinario","studio","medico","dottore"])}. Attenzione: "cercare un idraulico" o "devo cercare casa" sono cose da FARE, non ricerche. Se non è una ricerca, "search" è null.
+
+APPUNTI: non tutto è una cosa da fare. Se l'utente sta prendendo un APPUNTO — un'informazione da conservare, un'idea, un pensiero, un ricordo, dati da tenere a mente, il riassunto di una telefonata o di una riunione ("prendi nota", "appunto:", "annota che", "segna che il codice del cancello è 1234", "Marco ha detto che il preventivo arriva a fine mese", "idea per il regalo di Anna: un corso di ceramica") — mettilo in "notes" e NON in "items". Un appunto non ha una scadenza né un'azione precisa da spuntare. Se invece c'è un'azione da compiere ("devo", "comprare", "chiamare", "ricordami di") è una voce in "items". Una stessa frase può contenere entrambi.
+Per ogni appunto: "title" breve (2-5 parole, iniziale maiuscola, senza punto) e "text" con TUTTO il contenuto dettato, fedele, con punteggiatura e maiuscole corrette e gli errori di trascrizione evidenti sistemati; dividilo in paragrafi (\\n) se è lungo. Non riassumere e non inventare. Togli solo le parole di servizio iniziali ("prendi nota", "appunto", "annota che").
+${inNotes ? '\nL\'utente è nella sezione NOTE: tutto quello che detta è un appunto (metti tutto in "notes"), a meno che non dica esplicitamente di aggiungere una cosa da fare.\n' : ''}
 Come decidere la lista ("list"):
 A. Se l'utente indica dove metterla, anche in modo approssimativo o informale ("mettilo nel lavoro", "per casa", "nella spesa", "lista ufficio", "aggiungi a regali"), usa la lista esistente che corrisponde, anche se il nome non coincide esattamente.
 B. Se chiede esplicitamente una lista che non esiste ("crea la lista viaggi", "nella lista palestra"), usa quel nuovo nome: verrà creata.
@@ -100,12 +165,12 @@ Come scrivere le voci:
 Togli sempre dal testo le indicazioni di giorno, orario, ricorrenza e avviso ("domani", "alle 16", "avvisami mezz'ora prima", "tra 20 minuti").
 
 Rispondi SOLO con JSON valido, senza altro testo:
-{"items":[{"text":"...","list":"...","due":null,"time":null,"in":null,"remind":null,"repeat":null}],"done":[]}`;
+{"items":[{"text":"...","list":"...","due":null,"time":null,"in":null,"remind":null,"repeat":null}],"done":[],"notes":[],"search":null}`;
 
   const { text: out } = await chat(settings, [
     { role: 'system', content: system },
     { role: 'user', content: text },
-  ]);
+  ], { maxTokens: 1500 });
   const obj = extractJSON(out);
   const items = (Array.isArray(obj.items) ? obj.items : [])
     .filter((i) => i && typeof i.text === 'string' && i.text.trim())
@@ -121,7 +186,41 @@ Rispondi SOLO con JSON valido, senza altro testo:
   const done = [...new Set((Array.isArray(obj.done) ? obj.done : [])
     .map((n) => parseInt(n, 10) - 1)
     .filter((n) => n >= 0 && n < todo.length))];
-  return { items, done };
+  const notes = (Array.isArray(obj.notes) ? obj.notes : [])
+    .filter((n) => n && typeof n.text === 'string' && n.text.trim())
+    .map((n) => ({ title: typeof n.title === 'string' ? n.title.trim().slice(0, 80) : '', text: n.text.trim() }));
+  const sq = obj.search && typeof obj.search === 'object' && typeof obj.search.query === 'string' && obj.search.query.trim() ? obj.search : null;
+  const search = sq ? {
+    query: sq.query.trim(),
+    keywords: (Array.isArray(sq.keywords) ? sq.keywords : []).filter((k) => typeof k === 'string' && k.trim()).map((k) => k.trim().toLowerCase()).slice(0, 10),
+  } : null;
+  return { items, done, notes, search };
+}
+
+// Risponde a una domanda usando SOLO le voci e gli appunti trovati.
+// Risultato: { text, source } (source = indice in docs da cui viene la risposta) oppure null se lì non c'è
+export async function answer(question, docs, settings) {
+  const ctx = docs.map((d, i) => `[${i + 1}] (${d.kind}) ${d.text}`).join('\n');
+  const system = `Sei l'assistente di una app di to-do list e appunti. L'utente cerca un'informazione tra le cose che ha salvato. Rispondi in italiano, in modo diretto e breve (al massimo 2 frasi), usando SOLO le informazioni qui sotto: non inventare nulla.
+
+Cose salvate dall'utente:
+${ctx}
+
+Rispondi SOLO con JSON: {"answer":"...","source":N} dove N è il numero tra parentesi quadre della cosa da cui hai preso la risposta. Se l'informazione non c'è: {"answer":null,"source":null}`;
+  const { text } = await chat(settings, [{ role: 'system', content: system }, { role: 'user', content: question }], { maxTokens: 250, timeout: 15000 });
+  let obj;
+  try { obj = extractJSON(text); } catch (err) { obj = { answer: text.trim(), source: null }; } // modello che non rispetta il JSON: tieni il testo
+  const t = typeof obj.answer === 'string' ? obj.answer.trim() : '';
+  if (!t || /^null\.?$/i.test(t)) return null;
+  const n = parseInt(obj.source, 10) - 1;
+  return { text: t, source: n >= 0 && n < docs.length ? n : null };
+}
+
+// Titolo breve per un appunto, scritto in base al contenuto
+export async function makeTitle(text, settings) {
+  const system = `Dai un titolo a questo appunto: 2-5 parole in italiano, che dicano di cosa parla (es. "Password Wi-Fi di casa", "Preventivo di Marco", "Regalo per Anna"). Iniziale maiuscola, niente punto finale, niente virgolette. Rispondi SOLO con il titolo.`;
+  const { text: t } = await chat(settings, [{ role: 'system', content: system }, { role: 'user', content: text.slice(0, 1500) }], { maxTokens: 30, timeout: 15000 });
+  return t.trim().split('\n')[0].replace(/^["“'«]+|["”'».]+$/g, '').trim().slice(0, 60);
 }
 
 export async function testConnection(settings) {

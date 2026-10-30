@@ -7,14 +7,15 @@ To-do list per smartphone Android: inserimento rapido, dettatura vocale, liste s
 
 - **Inserimento lampo**: barra fissa in basso. Scrivi e premi Invio; il campo resta pronto per la voce successiva.
 - **Dettatura con invio automatico**: con il campo vuoto il pulsante tondo è un microfono. Lo tocchi e parli: quando smetti, una barra si svuota e la nota parte da sola. Se ti fermi su una frase lasciata a metà ("compra il latte e…") aspetta di più. Pausa regolabile in Impostazioni (Breve / Normale / Lunga); "Invia ora" per non aspettare. Dopo l'invio si apre la lista dove è finita la nota, evidenziata.
-- **Scorciatoia dalla Home**: tieni premuta l'icona di MyList e scegli **Detta**: si apre già in ascolto.
-- **"Hey Google, apri MyList"**: in Impostazioni → Dettatura → *Quando apri MyList* scegli **Ascolta subito**. Poi basta dire "Hey Google, apri MyList" e subito dopo la nota: l'app si apre già in ascolto (anche quando la riapri dopo almeno 30 secondi).
+- **Scorciatoia dalla Home**: tieni premuta l'icona di MyList e scegli **Detta**: si apre già in ascolto. Trascina **Detta** sulla Home per avere un'icona a sé: icona normale = liste, icona Detta = dettatura immediata (lo stesso con **Scrivi** per la tastiera).
 - **Condividi verso MyList**: da qualunque app (Chrome, WhatsApp…) usa *Condividi → MyList* per trasformare un testo in una voce.
 - **Liste** con emoji e colore (palette giallo/grigio). Le chip in alto filtrano; **Tutte** mostra tutto, raggruppato per lista oppure in un elenco unico.
 - **Gestisci liste** (icona etichette in alto o da Impostazioni): rinomina, cambia colore, elimina. Ogni lista è eliminabile (ne resta sempre almeno una); se contiene voci scegli se eliminarle o spostarle in un'altra lista.
 - **Spunta a voce**: di' o scrivi cosa hai già fatto ("ho preso le patate", "comprato il latte e il pane", "la lavatrice è fatta") e MyList spunta la voce corrispondente ("Prendere le patate") invece di crearne una nuova. Con l'AI capisce anche frasi miste ("ho preso le patate, devo comprare le uova"); senza AI funziona lo stesso con un riconoscimento locale. Se non trova niente da spuntare te lo dice e ti propone di aggiungerla.
 - **Date, orari e promemoria**: *"Alle 16:00 devo prendere la pasticca, avvisami mezz'ora prima"* → voce "Prendere la pasticca" per le 16:00 con avviso alle 15:30. *"Ricordami tra 20 minuti di aprire il cancello"* → avviso tra 20 minuti. *"Domani devo comprare l'acqua"* → scadenza domani, nessun avviso. Capisce anche *stasera alle 9*, *lunedì*, *il 5 novembre*, *un'ora / un giorno prima*. Orario e avviso si cambiano anche toccando la voce.
 - **Promemoria ricorrenti**: *"ogni giorno alle 8 prendere la pasticca"*, *"tutte le sere…"*, *"ogni lunedì e giovedì alle 19 palestra"*, *"il lunedì portare fuori la carta"*, *"dal lunedì al venerdì…"*, *"ogni 2 giorni…"*, *"ogni mese…"*. Quando la completi non sparisce: passa alla volta successiva. Con un orario avvisa da sola. Si imposta anche toccando la voce (Ripeti).
+- **Note (appunti)**: la chip **Note** raccoglie idee, informazioni e cose da ricordare. Detta "prendi nota…", "appunto…", "segna che…" da qualunque lista, oppure parla libero: con l'AI capisce da sola se è un appunto o una cosa da fare (anche entrambi nella stessa frase). Nella sezione Note tutto quello che detti è un appunto, con una pausa più lunga prima dell'invio. Ogni appunto riceve un **titolo scritto dall'AI** in base al contenuto (se lo scrivi tu, non lo tocca). Si può copiare, condividere, eliminare con uno swipe a sinistra; se l'AI sbaglia, un tocco lo sposta tra Note e liste.
+- **Cerca a voce**: "cerca il nome della clinica", "trova il codice del cancello", "qual era la password del wifi?". La ricerca guarda voci e appunti; con l'AI usa anche parole simili (clinica → veterinario, studio, ospedale) e **risponde in una frase** leggendo solo i risultati trovati. Se hai chiesto a voce, la risposta te la legge. Si chiude con la ×.
 - **Gesti**: scorri a destra per completare, a sinistra per eliminare (basta anche una passata veloce, da qualunque punto della voce). C'è sempre **Annulla**.
 - **Sintassi rapida** (anche senza AI):
   - `#spesa` → va nella lista Spesa
@@ -23,7 +24,7 @@ To-do list per smartphone Android: inserimento rapido, dettatura vocale, liste s
   - *ogni giorno*, *il lunedì*, *dal lunedì al venerdì*, *ogni mese* → ricorrenza
   - *"nella lista lavoro …"* → funziona anche a voce
 - **Smistamento AI** (opzionale): scrivi o detta una nota libera. L'AI capisce cosa vuoi fare e **dove metterla**: se lo dici ("mettilo nel lavoro", "per casa") usa quella lista, altrimenti sceglie lei la più adatta guardando anche cosa contiene già ogni lista. Più cose nella stessa nota diventano più voci, anche in liste diverse.
-- Grafica piatta a tinta unita: tema chiaro (testata gialla su grigio) e scuro (grafite e giallo), vibrazioni, animazioni, backup/ripristino in JSON.
+- Grafica piatta a tinta unita: tema chiaro (testata gialla su grigio), medio (grafite) e scuro (grafite e giallo), vibrazioni, animazioni, backup/ripristino in JSON.
 - Icone: [UIcons by Flaticon](https://www.flaticon.com/uicons) (regular rounded), incluse nell'app per funzionare offline.
 
 ## Metterla sul telefono
@@ -47,6 +48,8 @@ Per l'installazione e per il microfono serve **HTTPS**. Il modo più rapido, gra
 5. **Quando usarlo**: *Sempre* (default: testo scritto e dettato), *Solo dettatura* o *Mai*. Scrivere `#lista` salta l'AI e va dritto in quella lista.
 
 Se l'AI non risponde, la voce viene aggiunta comunque, così com'è, nella lista corrente.
+
+**Senza chiave: IA di Chrome.** Se non c'è una chiave OpenRouter (o OpenRouter non risponde), MyList prova l'IA integrata in Chrome (Gemini Nano, gratis e sul dispositivo). Oggi esiste solo su Chrome per computer con hardware adeguato (Windows, macOS, Linux; tanta memoria e spazio libero) e si scarica una volta da Impostazioni → Smistamento intelligente. **Su Chrome per Android non è ancora disponibile**: lì, senza chiave, MyList usa le regole locali e passerà da sola all'IA di Chrome quando Google la attiverà. L'italiano non è ancora tra le lingue ufficiali di Gemini Nano, quindi la qualità è inferiore a OpenRouter.
 
 **Privacy**: liste e chiave restano solo nel `localStorage` del telefono. All'AI vengono inviati solo la nota, i nomi delle liste e le ultime voci di ciascuna (per capire a cosa serve ogni lista).
 

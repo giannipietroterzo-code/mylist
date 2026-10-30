@@ -19,6 +19,7 @@ i[class^=fi-rr-]:before,i[class*=" fi-rr-"]:before{font-family:uicons-regular-ro
 .fi-rr-clipboard-list:before{content:"\f43b"}
 .fi-rr-clock:before{content:"\f45a"}
 .fi-rr-coffee:before{content:"\f48f"}
+.fi-rr-copy:before{content:"\f4dd"}
 .fi-rr-cross-small:before{content:"\f4f6"}
 .fi-rr-download:before{content:"\f591"}
 .fi-rr-eye:before{content:"\f5f8"}
@@ -38,6 +39,7 @@ i[class^=fi-rr-]:before,i[class*=" fi-rr-"]:before{font-family:uicons-regular-ro
 .fi-rr-microphone:before{content:"\f944"}
 .fi-rr-mobile-notch:before{content:"\f952"}
 .fi-rr-music:before{content:"\f999"}
+.fi-rr-notebook:before{content:"\f9ba"}
 .fi-rr-palette:before{content:"\f9ed"}
 .fi-rr-paper-plane:before{content:"\f9f7"}
 .fi-rr-party-horn:before{content:"\fa01"}
@@ -49,6 +51,7 @@ i[class^=fi-rr-]:before,i[class*=" fi-rr-"]:before{font-family:uicons-regular-ro
 .fi-rr-plus-small:before{content:"\faab"}
 .fi-rr-search:before{content:"\fbba"}
 .fi-rr-settings:before{content:"\fbd2"}
+.fi-rr-share:before{content:"\fbd5"}
 .fi-rr-shopping-cart:before{content:"\fbfc"}
 .fi-rr-sparkles:before{content:"\fc84"}
 .fi-rr-star:before{content:"\fce9"}

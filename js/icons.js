@@ -29,6 +29,9 @@ const MAP = {
   clock: 'clock',
   send: 'paper-plane',
   repeat: 'arrows-repeat',
+  notes: 'notebook',
+  copy: 'copy',
+  share: 'share',
 };
 
 export function icon(name, cls = '') {
