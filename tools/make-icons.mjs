@@ -81,17 +81,26 @@ function render(size, scene, ss = 4) {
   return png(size, size, buf);
 }
 
-// Disegno del logo: spunta grafite centrata con un leggero alone; s = scala
+// Logo: microfono grafite su giallo (disegno originale: capsula con griglia, supporto a U, asta e base)
+const W = 17; // metà spessore del tratto
+function micShape(X, Y) {
+  const capsule = Math.abs(roundRect(X, Y, 191, 112, 130, 200, 65)) - W;
+  const grille = Math.min(
+    segDist(X, Y, 191, 194, 233, 194), segDist(X, Y, 191, 240, 233, 240),
+    segDist(X, Y, 279, 194, 321, 194), segDist(X, Y, 279, 240, 321, 240),
+  ) - 12;
+  const holder = Y >= 232
+    ? Math.abs(Math.hypot(X - 256, Y - 232) - 118) - W
+    : Math.min(Math.hypot(X - 138, Y - 232), Math.hypot(X - 374, Y - 232)) - W;
+  const stand = Math.min(segDist(X, Y, 256, 350, 256, 398), segDist(X, Y, 206, 398, 306, 398)) - W;
+  return Math.min(capsule, grille, holder, stand);
+}
+
+// s = scala del disegno (per le icone "maskable" serve margine)
 function logo(px, py, bgAlpha, s = 1) {
   const X = (px - 256) / s + 256, Y = (py - 256) / s + 256;
-  const bg = grad((px + py) / 1024);
-  // spunta (stroke 64, cap round): 150,262 → 222,334 → 362,186
-  const d = Math.min(segDist(X, Y, 150, 262, 222, 334), segDist(X, Y, 222, 334, 362, 186)) - 32;
-  if (d <= 0) return INK;
-  // ombra morbida sotto la spunta
-  const sh = Math.min(segDist(X, Y - 14, 150, 262, 222, 334), segDist(X, Y - 14, 222, 334, 362, 186)) - 32;
-  const k = 0; // niente ombra sotto la spunta
-  return [...bg.map((v) => v * (1 - k)), bgAlpha];
+  if (micShape(X, Y) <= 0) return INK;
+  return [...grad(), bgAlpha];
 }
 
 const rounded = (px, py) => {
@@ -106,22 +115,16 @@ writeFileSync(new URL('icon-512.png', OUT), render(512, rounded, 3));
 writeFileSync(new URL('maskable-512.png', OUT), render(512, full(0.72), 3));
 writeFileSync(new URL('apple-touch-icon.png', OUT), render(180, full(0.85)));
 
-// Icone scorciatoie (cerchio sfumato con simbolo bianco)
+// Icone scorciatoie (cerchio giallo con simbolo grafite)
 function shortcut(draw) {
   return (px, py) => {
     const d = Math.hypot(px - 256, py - 256) - 256;
     if (d > 0) return [0, 0, 0, 0];
     if (draw(px, py) <= 0) return INK;
-    return [...grad((px + py) / 1024), 1];
+    return [...grad(), 1];
   };
 }
-const mic = (x, y) => Math.min(
-  roundRect(x, y, 206, 110, 100, 190, 50),
-  // arco a U sotto la capsula
-  y > 230 ? Math.abs(Math.hypot(x - 256, y - 240) - 100) - 16 : 1e9,
-  segDist(x, y, 256, 340, 256, 400) - 16,
-  segDist(x, y, 206, 402, 306, 402) - 16,
-);
+const mic = (x, y) => micShape((x - 256) / 0.8 + 256, (y - 256) / 0.8 + 256);
 const plus = (x, y) => Math.min(segDist(x, y, 256, 150, 256, 362), segDist(x, y, 150, 256, 362, 256)) - 26;
 writeFileSync(new URL('shortcut-mic.png', OUT), render(96, shortcut(mic)));
 writeFileSync(new URL('shortcut-add.png', OUT), render(96, shortcut(plus)));

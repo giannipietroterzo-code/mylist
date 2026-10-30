@@ -1,5 +1,7 @@
 // Service worker: app shell offline, aggiornamento in background (stale-while-revalidate)
-const CACHE = 'mylist-v8';
+// La versione arriva da js/version.js: cambiandola, i telefoni scaricano tutto di nuovo
+importScripts('js/version.js');
+const CACHE = 'mylist-v' + self.MYLIST_VERSION;
 const ASSETS = [
   './',
   './index.html',
@@ -7,6 +9,7 @@ const ASSETS = [
   './vendor/uicons/uicons.css',
   './vendor/uicons/uicons-regular-rounded.woff2',
   './js/app.js',
+  './js/version.js',
   './js/store.js',
   './js/ai.js',
   './js/voice.js',

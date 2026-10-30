@@ -83,19 +83,35 @@ input, textarea, select { font: inherit; color: inherit; }
 }
 
 /* ---------- Header ---------- */
-.top { padding-top: max(8px, env(safe-area-inset-top)); }
-.top-row { display: flex; align-items: center; gap: 10px; min-height: 60px; }
+/* Intestazione: com'era, ma su sfondo grigio (il giallo solo nel logo) */
+.top { padding-top: max(14px, env(safe-area-inset-top)); }
+.top-row { display: flex; align-items: center; justify-content: space-between; height: 44px; }
+.brand { display: flex; align-items: center; gap: 8px; }
 .brand-mark {
-  width: 32px; height: 32px; border-radius: 10px; flex: none;
-  display: grid; place-items: center; font-size: 17px;
+  width: 28px; height: 28px; border-radius: 9px; flex: none;
+  display: grid; place-items: center; font-size: 16px;
   background: var(--accent); color: var(--on-accent);
 }
-.title { flex: 1; min-width: 0; }
-h1 {
-  margin: 0; font-size: 21px; line-height: 1.2; font-weight: 750; letter-spacing: -.02em;
-  display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.brand-name { font-weight: 800; font-size: 18px; letter-spacing: -.02em; color: var(--text); }
+.top-actions, .title-actions { display: flex; gap: 4px; }
+.icon-btn {
+  width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center;
+  color: var(--text-2); transition: background .15s, transform .1s;
 }
-.sub { margin: 1px 0 0; color: var(--text-2); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.icon-btn:active { transform: scale(.92); background: var(--surface-2); }
+.icon-btn.small { width: 36px; height: 36px; border-radius: 12px; }
+.icon-btn.small .ico { font-size: 19px; }
+.top-actions .icon-btn .ico { font-size: 21px; }
+
+.title-row { display: flex; align-items: flex-end; justify-content: space-between; margin: 12px 0 14px; gap: 12px; }
+.title { min-width: 0; }
+h1 {
+  margin: 0; font-size: 32px; line-height: 1.1; font-weight: 800; letter-spacing: -.03em;
+  display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden;
+}
+.t-txt { overflow: hidden; text-overflow: ellipsis; }
+.ver { flex: none; align-self: center; margin-left: 2px; padding: 3px 8px; border-radius: 99px; background: var(--surface-2); color: var(--text-2); font-size: 12px; font-weight: 700; letter-spacing: 0; }
+.sub { margin: 6px 0 0; color: var(--text-2); font-size: 14px; }
 .sub::first-letter { text-transform: uppercase; }
 .top-actions { display: flex; gap: 0; margin-right: -6px; }
 .icon-btn {
@@ -120,7 +136,7 @@ h1 {
 .chips {
   position: sticky; top: 0; z-index: 5;
   display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
-  margin: 0 -16px; padding: 4px 16px 12px;
+  margin: 0 -16px; padding: 8px 16px 12px;
   background: var(--bg);
   max-width: 640px; margin-left: auto; margin-right: auto;
 }
@@ -506,7 +522,7 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 }
 
 /* icone Flaticon nel testo */
-.t-ico { display: inline-flex; font-size: 18px; color: color-mix(in srgb, var(--c) 75%, var(--text)); }
+.t-ico { display: inline-flex; font-size: 26px; color: color-mix(in srgb, var(--c) 75%, var(--text)); }
 .tag .li { font-size: 11px; }
 .target .li { font-size: 20px; color: color-mix(in srgb, var(--c) 70%, var(--text)); }
 .tips .ico, .muted .ico { font-size: 14px; vertical-align: -2px; }

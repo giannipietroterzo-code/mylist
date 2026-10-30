@@ -49,13 +49,14 @@ Se l'AI non risponde, la voce viene aggiunta comunque, così com'è, nella lista
 ```
 index.html              pagina unica
 css/style.css           tutta la grafica (tema chiaro/scuro)
+js/version.js           numero di versione (unico punto da cambiare)
 js/app.js               UI, gesti, sheet, impostazioni
 js/store.js             dati e salvataggio locale
 js/voice.js             dettatura (Web Speech API)
 js/ai.js                OpenRouter: smistamento, test, elenco modelli
 sw.js                   service worker (offline)
 manifest.webmanifest    installazione, scorciatoie, condivisione
-icons/                  icone dell'app (rigenerabili con: node tools/make-icons.mjs)
+icons/                  logo e icone dell'app: microfono disegnato a mano (rigenerabili con: node tools/make-icons.mjs)
 vendor/uicons/          Flaticon UIcons: solo le icone usate (rigenera con: node tools/build-uicons.mjs)
 ```
 
@@ -65,4 +66,4 @@ vendor/uicons/          Flaticon UIcons: solo le icone usate (rigenera con: node
 python3 -m http.server 8790
 ```
 
-Poi apri <http://localhost:8790>. Quando pubblichi una nuova versione, incrementa `CACHE` in `sw.js` (es. `mylist-v2`) così i telefoni scaricano i file aggiornati.
+Poi apri <http://localhost:8790>. Quando pubblichi una nuova versione, cambia il numero in `js/version.js` (es. `1.9` → `2.0`): compare accanto al titolo e fa scaricare ai telefoni i file aggiornati, che si ricaricano da soli.

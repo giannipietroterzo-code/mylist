@@ -6,6 +6,7 @@ import {
 import { voiceSupported, listen } from './voice.js';
 
 const PAUSE_MS = { short: 900, normal: 1500, long: 2500 };
+const VERSION = window.MYLIST_VERSION || '';
 import { aiReady, organize, testConnection, listModels } from './ai.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -148,10 +149,11 @@ function render() {
 function renderHeader() {
   const l = currentList();
   const searching = !!ui.search.trim();
-  $('#viewTitle').innerHTML = searching ? 'Risultati' : l ? `<span class="t-ico" style="${cv(l.color)}">${listIcon(l)}</span>${esc(l.name)}` : 'Tutte';
+  const title = searching ? 'Risultati' : l ? `<span class="t-ico" style="${cv(l.color)}">${listIcon(l)}</span><span class="t-txt">${esc(l.name)}</span>` : '<span class="t-txt">Tutte</span>';
+  $('#viewTitle').innerHTML = `${title}${VERSION ? `<span class="ver">v${VERSION}</span>` : ''}`;
   const n = openCount(l?.id);
-  const today = new Date().toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '');
-  $('#viewSub').textContent = `${n ? `${n} da fare` : 'Tutto fatto'} · ${today}`;
+  const today = new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+  $('#viewSub').textContent = `${n ? (n === 1 ? '1 cosa da fare' : `${n} cose da fare`) : 'Tutto fatto'} · ${today}`;
   $('#btnEditList').hidden = !l;
   $('#btnGroup').hidden = !!l || searching;
   $('#btnGroup').innerHTML = icon(settings.grouped ? 'group' : 'flat');
@@ -668,7 +670,7 @@ function openSettings() {
         <button class="pill-btn ghost danger" id="sReset">${icon('trash')}Azzera tutto</button>
       </div>
     </section>
-    <p class="foot">MyList 1.1 · Icone <a href="https://www.flaticon.com/uicons" target="_blank" rel="noopener">UIcons by Flaticon</a></p>
+    <p class="foot">MyList ${VERSION} · Icone <a href="https://www.flaticon.com/uicons" target="_blank" rel="noopener">UIcons by Flaticon</a></p>
   `, (root) => {
     const key = $('#sKey', root);
     key.addEventListener('input', () => {
