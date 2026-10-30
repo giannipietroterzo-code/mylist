@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <title>MyList</title>
+  <meta name="description" content="La tua to-do list veloce, con dettatura e smistamento intelligente.">
+  <meta name="theme-color" content="#F5F4FA" id="metaTheme">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/style.css">
+  <script>
+    // Applica il tema prima del primo paint, per evitare il flash bianco
+    try {
+      const s = JSON.parse(localStorage.getItem('mylist.settings.v1') || '{}');
+      if (s.theme && s.theme !== 'auto') document.documentElement.dataset.theme = s.theme;
+    } catch (e) {}
+  </script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div class="top-row">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-name">MyList</span>
+        </div>
+        <div class="top-actions">
+          <button class="icon-btn" id="btnSearch" aria-label="Cerca"></button>
+          <button class="icon-btn" id="btnSettings" aria-label="Impostazioni"></button>
+        </div>
+      </div>
+
+      <div class="search" id="searchBox" hidden>
+        <span class="search-ico" id="searchIco"></span>
+        <input id="searchInput" type="search" placeholder="Cerca in tutte le liste…" autocomplete="off" enterkeyhint="search">
+      </div>
+
+      <div class="title-row">
+        <div>
+          <h1 id="viewTitle">Tutte</h1>
+          <p id="viewSub" class="sub"></p>
+        </div>
+        <div class="title-actions">
+          <button class="icon-btn small" id="btnGroup" aria-label="Raggruppa per lista"></button>
+          <button class="icon-btn small" id="btnEditList" aria-label="Modifica lista" hidden></button>
+        </div>
+      </div>
+    </header>
+
+    <nav class="chips" id="chips" aria-label="Liste"></nav>
+
+    <main id="main" class="main"></main>
+  </div>
+
+  <!-- Barra di inserimento rapido -->
+  <form class="composer" id="composer" autocomplete="off">
+    <button type="button" class="target" id="btnTarget" aria-label="Lista di destinazione"></button>
+    <input id="newText" type="text" placeholder="Cosa devi fare?" enterkeyhint="send" autocapitalize="sentences">
+    <button type="submit" class="go" id="btnGo" aria-label="Detta o aggiungi"></button>
+  </form>
+  <div class="picker" id="targetPicker" hidden></div>
+
+  <!-- Overlay dettatura -->
+  <div class="voice" id="voice" hidden>
+    <div class="voice-inner">
+      <p class="voice-hint" id="voiceHint">Ti ascolto…</p>
+      <button class="voice-orb" id="voiceOrb" aria-label="Termina dettatura">
+        <span class="ring r1"></span><span class="ring r2"></span><span class="ring r3"></span>
+        <span class="orb-ico" id="voiceOrbIco"></span>
+      </button>
+      <p class="voice-text" id="voiceText"></p>
+      <p class="voice-target" id="voiceTarget"></p>
+    </div>
+    <div class="voice-actions">
+      <button class="pill-btn ghost" id="voiceCancel">Annulla</button>
+      <button class="pill-btn" id="voiceDone">Fatto</button>
+    </div>
+  </div>
+
+  <!-- Bottom sheet generico -->
+  <dialog class="sheet" id="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-body" id="sheetBody"></div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden>
+    <span id="toastText"></span>
+    <button id="toastAction" hidden></button>
+  </div>
+
+  <input type="file" id="importFile" accept="application/json,.json" hidden>
+</body>
+</html>
