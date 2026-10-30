@@ -8,6 +8,8 @@ import { voiceSupported, listen } from './voice.js';
 const PAUSE_MS = { short: 900, normal: 1500, long: 2500 };
 const VERSION = window.MYLIST_VERSION || '';
 import { aiReady, organize, testConnection, listModels } from './ai.js';
+import { dayKey, addDays, hhmm, parseWhen, remindAt, fromNow, dayFor } from './when.js';
+import { initReminders, settle, notifySupported, notifyPermission, askNotify, newTopic, ntfyLink, sendTest } from './reminders.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -33,30 +35,29 @@ function ink(hex) {
 const cv = (color) => `--c:${color};--on:${ink(color)}`;
 
 // ---------- Date ----------
-const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const addDays = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return dayKey(d); };
-function dueLabel(due) {
+function dueLabel(due, time = null) {
   if (!due) return null;
-  const today = dayKey(new Date());
-  if (due < today) return { text: 'In ritardo', cls: 'late' };
-  if (due === today) return { text: 'Oggi', cls: 'today' };
-  if (due === addDays(1)) return { text: 'Domani', cls: '' };
+  const now = new Date();
+  const today = dayKey(now);
+  const at = time ? ` ${time}` : '';
+  if (due < today || (due === today && time && time < hhmm(now))) return { text: due === today ? `Oggi${at}` : 'In ritardo', cls: 'late' };
+  if (due === today) return { text: `Oggi${at}`, cls: 'today' };
+  if (due === addDays(1)) return { text: `Domani${at}`, cls: '' };
   const d = new Date(due + 'T12:00:00');
-  return { text: d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' }), cls: '' };
+  return { text: d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' }) + at, cls: '' };
 }
+const fmtTime = (ms) => hhmm(new Date(ms));
 
 function sortOpen(items) {
-  return items.sort((a, b) =>
-    ((a.due || '9999') < (b.due || '9999') ? -1 : (a.due || '9999') > (b.due || '9999') ? 1 : 0) ||
-    (b.createdAt - a.createdAt));
+  const k = (i) => `${i.due || '9999'} ${i.time || '99:99'}`;
+  return items.sort((a, b) => (k(a) < k(b) ? -1 : k(a) > k(b) ? 1 : 0) || (b.createdAt - a.createdAt));
 }
 
 // ---------- Inserimento rapido (senza AI) ----------
-// Sintassi: "#lista" sposta nella lista, "oggi/domani/dopodomani" = scadenza
+// Sintassi: "#lista" sposta nella lista; giorno, orario e avviso li capisce parseWhen ("alle 16", "tra 20 minuti", "avvisami mezz'ora prima")
 function parseQuick(raw, fallbackListId) {
   let text = ' ' + raw.trim() + ' ';
   let listId = fallbackListId;
-  let due = null;
 
   text = text.replace(/\s#([\p{L}\p{N}_-]+)/gu, (m, tag) => {
     const l = findListByName(tag);
@@ -69,12 +70,8 @@ function parseQuick(raw, fallbackListId) {
     if (l) { listId = l.id; return ' '; }
     return m;
   });
-  const when = { oggi: 0, domani: 1, dopodomani: 2 };
-  text = text.replace(/\s(?:per\s+)?(oggi|domani|dopodomani)(?=\s)/i, (m, w) => { due = addDays(when[w.toLowerCase()]); return ' '; });
-
-  text = text.replace(/\s+/g, ' ').trim();
-  if (text) text = text[0].toUpperCase() + text.slice(1);
-  return { text, listId, due };
+  const w = parseWhen(text);
+  return { text: w.text, listId, due: w.due, time: w.time, remind: w.remind };
 }
 
 // ---------- "Ho preso le patate" → spunta "Prendere le patate" (anche senza AI) ----------
@@ -125,7 +122,8 @@ function addItems(entries, { reveal = false, done = [] } = {}) {
   const added = [];
   entries.forEach((e, i) => {
     if (!e.text) return;
-    const it = { id: uid(), text: e.text, listId: e.listId || fallbackList().id, done: false, due: e.due || null, createdAt: now - i };
+    const it = { id: uid(), text: e.text, listId: e.listId || fallbackList().id, done: false, due: e.due || null, time: e.time || null, remind: e.remind ?? null, createdAt: now - i };
+    settle(it);
     data.items.push(it);
     ui.fresh.add(it.id);
     added.push(it);
@@ -166,11 +164,24 @@ function addItems(entries, { reveal = false, done = [] } = {}) {
     }, fin.length ? (reveal ? 900 : 550) : 0);
   });
   const lists = [...new Set(added.map((a) => listOf(a).name))];
+  const bell = added.map(remindAt).filter((at) => at && at > Date.now());
   const addMsg = !added.length ? ''
+    : added.length === 1 && bell.length ? `Ti avviso ${dayKey(new Date(bell[0])) === dayKey(new Date()) ? '' : dueLabel(dayKey(new Date(bell[0]))).text.toLowerCase() + ' '}alle ${fmtTime(bell[0])} · ${listOf(added[0]).name}`
     : added.length === 1 ? `Aggiunta in ${listOf(added[0]).name}` : `${added.length} voci → ${lists.join(', ')}`;
+  if (bell.length) nudgeNotify();
   const doneMsg = !finishing.length ? ''
     : finishing.length === 1 ? (added.length ? '1 completata' : `Fatto: ${finishing[0].text}`) : `${finishing.length} completate`;
   toast([addMsg, doneMsg].filter(Boolean).join(' · '), 'Annulla', undo);
+}
+
+// Primo promemoria senza un canale per gli avvisi: dopo la conferma, proponi di attivarli
+function nudgeNotify() {
+  if (ui.nudged || settings.ntfyTopic || !notifySupported || notifyPermission() !== 'default') return;
+  ui.nudged = true;
+  setTimeout(() => toast('Per ricevere gli avvisi attiva le notifiche', 'Attiva', async () => {
+    const p = await askNotify();
+    toast(p === 'granted' ? 'Notifiche attive. Per gli avvisi ad app chiusa vedi Impostazioni → Promemoria' : 'Notifiche non concesse');
+  }), 4700);
 }
 
 // "Ho fatto X" ma X non c'è tra le cose da fare
@@ -224,7 +235,11 @@ async function smartAdd(text, { viaVoice = false } = {}) {
         l = { id: uid(), name: r.list[0].toUpperCase() + r.list.slice(1), icon: 'clipboard-list', color: nextColor() };
         data.lists.push(l);
       }
-      return { text: r.text, listId: (l || targetList()).id, due: r.due };
+      // "tra 20 minuti" → orario esatto; orario senza giorno → oggi o domani; avviso senza orario → alle 9
+      let { due, time } = r.in ? fromNow(r.in) : r;
+      if (r.remind != null && !time) time = '09:00';
+      if (time && !due) due = dayFor(time);
+      return { text: r.text, listId: (l || targetList()).id, due, time, remind: r.remind };
     });
     addItems(entries, { reveal: viaVoice, done: res.done.map((n) => todo[n].id) });
   } catch (err) {
@@ -276,10 +291,12 @@ function renderChips() {
 
 function itemHTML(it, showList) {
   const l = listOf(it);
-  const due = dueLabel(it.due);
+  const due = dueLabel(it.due, it.time);
+  const at = remindAt(it);
   const meta = [
     showList ? `<span class="tag" style="${cv(l.color)}">${listIcon(l)}${esc(l.name)}</span>` : '',
-    due && !it.done ? `<span class="tag due ${due.cls}">${icon('calendar')}${due.text}</span>` : '',
+    due && !it.done ? `<span class="tag due ${due.cls}">${icon(it.time ? 'clock' : 'calendar')}${due.text}</span>` : '',
+    at && !it.done ? `<span class="tag bell ${it.fired === at ? 'past' : ''}" title="Avviso">${icon('bell')}${it.remind ? fmtTime(at) : ''}</span>` : '',
   ].join('');
   return `<li class="item ${it.done ? 'is-done' : ''} ${ui.fresh.has(it.id) ? 'pop' : ''}" data-id="${it.id}" style="${cv(l.color)}">
     <div class="swipe-bg"><span class="sw-l">${icon('check')}</span><span class="sw-r">${icon('trash')}</span></div>
@@ -541,6 +558,7 @@ sheet.addEventListener('cancel', (e) => { e.preventDefault(); closeSheet(); });
 })();
 
 // ---------- Modifica voce ----------
+const REMIND_OPTS = [[null, 'Nessun avviso'], [0, "All'ora"], [10, '10 min prima'], [30, '30 min prima'], [60, '1 ora prima'], [1440, '1 giorno prima']];
 function editItem(id) {
   const it = data.items.find((i) => i.id === id);
   if (!it) return;
@@ -557,6 +575,15 @@ function editItem(id) {
       <label class="chip soft date ${it.due && !dueOpts.some(([, v]) => v === it.due) ? 'on' : ''}">${icon('calendar')}<span>${it.due && !dueOpts.some(([, v]) => v === it.due) ? dueLabel(it.due).text : 'Data…'}</span><input type="date" id="eDate" value="${it.due || ''}"></label>
       ${it.due ? `<button class="chip soft" data-due="">${icon('x')}Nessuna</button>` : ''}
     </div>
+    <label class="lbl">Orario e avviso</label>
+    <div class="row wrap" id="eTimeRow">
+      <label class="chip soft date ${it.time ? 'on' : ''}">${icon('clock')}<span>${it.time || 'Orario…'}</span><input type="time" id="eTime" value="${it.time || ''}"></label>
+      ${it.time ? `<button class="chip soft" data-time="">${icon('x')}Nessuno</button>` : ''}
+    </div>
+    <div class="row wrap top-gap-s" id="eRemind">
+      ${REMIND_OPTS.map(([v, t]) => `<button class="chip soft ${(it.remind ?? null) === v ? 'on' : ''}" data-remind="${v ?? ''}">${v == null ? '' : icon('bell')}${t}</button>`).join('')}
+    </div>
+    ${remindAt(it) ? `<p class="muted small">${icon('bell')} Avviso ${dueLabel(dayKey(new Date(remindAt(it)))).text.replace(/ \d.*/, '').toLowerCase()} alle ${fmtTime(remindAt(it))}${settings.ntfyTopic ? '' : ' · arriva se MyList è aperta o in background (per averlo sempre: Impostazioni → Promemoria)'}</p>` : ''}
     <div class="row top-gap">
       <button class="pill-btn danger ghost grow" id="eDel">${icon('trash')}Elimina</button>
       <button class="pill-btn grow" data-close>Fatto</button>
@@ -576,10 +603,33 @@ function editItem(id) {
       const b = e.target.closest('[data-due]');
       if (!b) return;
       it.due = b.dataset.due || null;
+      if (!it.due) { it.time = null; it.remind = null; }
+      settle(it);
       commit();
       editItem(id);
     });
-    $('#eDate', root).addEventListener('change', (e) => { it.due = e.target.value || null; commit(); editItem(id); });
+    $('#eDate', root).addEventListener('change', (e) => { it.due = e.target.value || null; settle(it); commit(); editItem(id); });
+    const setTime = (v) => {
+      it.time = v || null;
+      if (it.time && !it.due) it.due = dayFor(it.time);
+      if (!it.time) it.remind = null;
+      settle(it);
+      commit();
+      editItem(id);
+    };
+    $('#eTime', root).addEventListener('change', (e) => setTime(e.target.value));
+    $('#eTimeRow', root).addEventListener('click', (e) => { if (e.target.closest('[data-time]')) setTime(''); });
+    $('#eRemind', root).addEventListener('click', (e) => {
+      const b = e.target.closest('[data-remind]');
+      if (!b) return;
+      it.remind = b.dataset.remind === '' ? null : +b.dataset.remind;
+      if (it.remind != null && !it.time) it.time = '09:00';
+      if (it.time && !it.due) it.due = dayFor(it.time);
+      settle(it);
+      commit();
+      editItem(id);
+      if (it.remind != null) nudgeNotify();
+    });
     $('#eDel', root).addEventListener('click', () => {
       closeSheet();
       data.items = data.items.filter((i) => i.id !== id);
@@ -712,6 +762,59 @@ function manageLists() {
   });
 }
 
+// ---------- Impostazioni: promemoria ----------
+function notifyRow() {
+  const p = notifyPermission();
+  if (!notifySupported) return `<span class="muted small">${icon('warn')} Non supportate da questo browser</span>`;
+  if (p === 'granted') return `<span class="ok-badge">${icon('check')}Attive</span>`;
+  if (p === 'denied') return `<span class="muted small">${icon('warn')} Bloccate: riattivale dalle impostazioni del sito in Chrome (lucchetto → Autorizzazioni)</span>`;
+  return `<button class="pill-btn ghost" id="sNotify">${icon('bell')}Attiva notifiche</button>`;
+}
+function ntfyBox() {
+  const t = settings.ntfyTopic;
+  if (!t) return `<p class="muted small">Con l'app gratuita <b>ntfy</b> gli avvisi arrivano all'ora giusta anche con MyList chiusa e il telefono in tasca.</p>`;
+  return `<ol class="steps">
+      <li><span>Installa <b>ntfy</b> dal Play Store</span><a class="pill-btn ghost small-btn" href="https://play.google.com/store/apps/details?id=io.heckel.ntfy" target="_blank" rel="noopener">Play Store</a></li>
+      <li><span>Collega MyList: si apre ntfy e si iscrive al tuo canale</span><a class="pill-btn small-btn" href="${ntfyLink(t)}">${icon('bell')}Collega</a></li>
+      <li><span>Controlla che arrivi</span><button class="pill-btn ghost small-btn" id="sNtfyTest">${icon('send')}Prova</button></li>
+    </ol>
+    <p class="status small" id="sNtfyStatus"></p>
+    <p class="muted small">Canale privato: <code>${esc(t)}</code><br>Il testo dei promemoria passa dal server ntfy.sh, che lo consegna al telefono (si programma fino a 3 giorni prima; gli avvisi più lontani partono alle aperture successive di MyList). In ntfy attiva la <i>consegna istantanea</i> per non avere ritardi.</p>`;
+}
+function bindReminderSettings(root) {
+  const bindNotify = () => $('#sNotify', root)?.addEventListener('click', async () => {
+    await askNotify();
+    $('#sNotifyRow', root).innerHTML = notifyRow();
+    bindNotify();
+  });
+  bindNotify();
+  const bindTest = () => $('#sNtfyTest', root)?.addEventListener('click', async () => {
+    const st = $('#sNtfyStatus', root);
+    st.className = 'status small';
+    st.textContent = 'Invio…';
+    try {
+      await sendTest(settings.ntfyTopic);
+      st.classList.add('ok');
+      st.textContent = 'Inviato: ti è arrivata la notifica di ntfy?';
+    } catch (err) {
+      st.classList.add('err');
+      st.textContent = `Errore: ${err.message}`;
+    }
+  });
+  bindTest();
+  $('#sNtfy', root).addEventListener('click', (e) => {
+    const b = e.target.closest('[data-v]');
+    if (!b) return;
+    settings.ntfyTopic = b.dataset.v === 'on' ? (settings.ntfyTopic || ui.lastTopic || newTopic()) : '';
+    if (settings.ntfyTopic) ui.lastTopic = settings.ntfyTopic;
+    saveSettings();
+    $('#sNtfy', root).querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+    $('#sNtfyBox', root).innerHTML = ntfyBox();
+    bindTest();
+    window.dispatchEvent(new Event('mylist:saved'));
+  });
+}
+
 // ---------- Impostazioni ----------
 function openSettings() {
   const seg = (name, val, opts) => `<div class="seg" data-seg="${name}">${opts.map(([v, t]) => `<button class="${val === v ? 'on' : ''}" data-v="${v}">${t}</button>`).join('')}</div>`;
@@ -754,6 +857,18 @@ function openSettings() {
     </section>
 
     <section class="card">
+      <h3>${icon('bell')}Promemoria</h3>
+      <p class="muted small">Di' o scrivi <i>"alle 16 prendere la pasticca, avvisami mezz'ora prima"</i> oppure <i>"ricordami tra 20 minuti di aprire il cancello"</i>.</p>
+      <label class="lbl">Notifiche di questo telefono</label>
+      <div class="row wrap" id="sNotifyRow">${notifyRow()}</div>
+      <p class="muted small">Arrivano se MyList è aperta o in background da poco: un'app web non può svegliarsi da sola a telefono in tasca.</p>
+
+      <label class="lbl">Avvisi sicuri anche ad app chiusa</label>
+      <div class="seg" id="sNtfy"><button class="${settings.ntfyTopic ? '' : 'on'}" data-v="off">Spenti</button><button class="${settings.ntfyTopic ? 'on' : ''}" data-v="on">Con ntfy</button></div>
+      <div id="sNtfyBox">${ntfyBox()}</div>
+    </section>
+
+    <section class="card">
       <h3>${icon('eye')}Aspetto</h3>
       ${seg('theme', settings.theme, [['auto', 'Automatico'], ['light', 'Chiaro'], ['dark', 'Scuro']])}
     </section>
@@ -768,7 +883,8 @@ function openSettings() {
       <h3>${icon('bolt')}Scorciatoie</h3>
       <ul class="tips">
         <li><code>#spesa</code> manda la voce nella lista Spesa</li>
-        <li><i>oggi</i>, <i>domani</i>, <i>dopodomani</i> impostano la scadenza</li>
+        <li><i>oggi</i>, <i>domani</i>, <i>venerdì</i>, <i>il 5 novembre</i> impostano la scadenza</li>
+        <li><i>alle 16</i>, <i>tra 20 minuti</i>, <i>avvisami mezz'ora prima</i> impostano orario e avviso</li>
         <li>Scorri a destra ${icon('check')} per completare, a sinistra ${icon('trash')} per eliminare</li>
         <li>Tieni premuta l'icona dell'app sul telefono → <b>Detta</b> per dettare al volo</li>
       </ul>
@@ -818,6 +934,7 @@ function openSettings() {
       }
     };
     $('#sLists', root).onclick = manageLists;
+    bindReminderSettings(root);
     $('#sExport', root).onclick = exportData;
     $('#sImport', root).onclick = () => $('#importFile').click();
     $('#sReset', root).onclick = () => {
@@ -1142,6 +1259,17 @@ applyTheme();
 bind();
 render();
 handleLaunchParams();
+// Le etichette "Oggi 16:00" diventano "in ritardo" col passare del tempo: aggiorna ogni minuto (mai durante uno swipe)
+setInterval(() => {
+  if (!document.hidden && !document.querySelector('.item.swiping, .item.collapse') && !$('#newText').matches(':focus')) renderMain();
+}, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+// Avviso arrivato con l'app aperta: vibra e mostralo, con "Fatto" a portata di dito
+initReminders((it, late) => {
+  navigator.vibrate?.([200, 100, 200]);
+  render();
+  toast(`${late ? 'Era alle' : 'Promemoria ·'} ${late ? fmtTime(remindAt(it)) + ': ' : ''}${it.text}`, 'Fatto', () => toggleDoneImmediate(it.id));
+});
 
 // Aggiornamenti: appena il nuovo service worker prende il controllo ricarica la pagina
 // (se stai scrivendo o dettando, mostra invece un avviso con "Aggiorna")

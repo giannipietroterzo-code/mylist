@@ -50,6 +50,7 @@ export const DEFAULT_SETTINGS = {
   showDone: false,
   view: 'all',
   target: 'inbox',
+  ntfyTopic: '', // canale ntfy per gli avvisi ad app chiusa ('' = spento)
 };
 
 function read(key, fallback) {
@@ -87,6 +88,7 @@ try { localStorage.setItem(DATA_KEY, JSON.stringify(data)); } catch (e) {}
 
 export function saveData() {
   localStorage.setItem(DATA_KEY, JSON.stringify(data));
+  window.dispatchEvent(new Event('mylist:saved')); // i promemoria si riprogrammano da soli
 }
 export function saveSettings() {
   localStorage.setItem(SET_KEY, JSON.stringify(settings));

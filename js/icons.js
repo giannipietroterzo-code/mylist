@@ -25,6 +25,9 @@ const MAP = {
   coffee: 'coffee',
   heart: 'heart',
   warn: 'triangle-warning',
+  bell: 'bell',
+  clock: 'clock',
+  send: 'paper-plane',
 };
 
 export function icon(name, cls = '') {

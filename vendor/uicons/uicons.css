@@ -6,6 +6,7 @@ i[class^=fi-rr-]:before,i[class*=" fi-rr-"]:before{font-family:uicons-regular-ro
 .fi-rr-apps:before{content:"\f16c"}
 .fi-rr-arrow-small-up:before{content:"\f19f"}
 .fi-rr-baby:before{content:"\f1e4"}
+.fi-rr-bell:before{content:"\f239"}
 .fi-rr-bolt:before{content:"\f26c"}
 .fi-rr-book:before{content:"\f288"}
 .fi-rr-briefcase:before{content:"\f2e9"}
@@ -15,6 +16,7 @@ i[class^=fi-rr-]:before,i[class*=" fi-rr-"]:before{font-family:uicons-regular-ro
 .fi-rr-car-side:before{content:"\f365"}
 .fi-rr-check:before{content:"\f3c8"}
 .fi-rr-clipboard-list:before{content:"\f43b"}
+.fi-rr-clock:before{content:"\f45a"}
 .fi-rr-coffee:before{content:"\f48f"}
 .fi-rr-cross-small:before{content:"\f4f6"}
 .fi-rr-download:before{content:"\f591"}
@@ -36,6 +38,7 @@ i[class^=fi-rr-]:before,i[class*=" fi-rr-"]:before{font-family:uicons-regular-ro
 .fi-rr-mobile-notch:before{content:"\f952"}
 .fi-rr-music:before{content:"\f999"}
 .fi-rr-palette:before{content:"\f9ed"}
+.fi-rr-paper-plane:before{content:"\f9f7"}
 .fi-rr-party-horn:before{content:"\fa01"}
 .fi-rr-paw:before{content:"\fa0f"}
 .fi-rr-pencil:before{content:"\fa29"}

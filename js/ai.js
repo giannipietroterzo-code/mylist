@@ -45,14 +45,18 @@ function extractJSON(text) {
   return JSON.parse(clean.slice(start, end + 1));
 }
 
+// minuti dal JSON del modello: numero intero o null
+const mins = (v) => (v == null || v === '' || !Number.isFinite(+v) ? null : Math.round(+v));
+
 const fmtDate = (d) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 // lists: [{ name, examples: [testi di voci già presenti] }] — gli esempi aiutano a capire a cosa serve ogni lista
 // todo: [{ text, list }] voci ancora da fare, numerate nel prompt: l'AI indica quali risultano già fatte
-// Risultato: { items: [{ text, list, due }], done: [indici in todo] }
+// Risultato: { items: [{ text, list, due, time, in, remind }], done: [indici in todo] }
 export async function organize(text, lists, settings, { openList, fallback, todo = [] }) {
   const now = new Date();
+  const hm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   const day = now.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const names = lists
     .map((l) => `- ${l.name}${l.examples.length ? ` (contiene già: ${l.examples.map((e) => `"${e}"`).join(', ')})` : ''}`)
@@ -61,7 +65,7 @@ export async function organize(text, lists, settings, { openList, fallback, todo
 
   const system = `Sei l'assistente di una app di to-do list. L'utente ti scrive o ti detta a voce una nota (può contenere errori di trascrizione). Il tuo compito: capire cosa vuole fare e DOVE vuole metterla.
 
-Oggi è ${day} (${fmtDate(now)}).
+Oggi è ${day} (${fmtDate(now)}), sono le ${hm}.
 
 Liste dell'utente:
 ${names}
@@ -82,10 +86,14 @@ Le parole usate per indicare la lista ("mettilo in…", "nella lista…") NON va
 Come scrivere le voci:
 1. Le voci nuove vanno in "items". Se la nota contiene più cose distinte (un elenco della spesa, "devo fare X e poi Y") crea una voce per ciascuna; se è un'unica attività, una sola voce. Cose diverse possono andare in liste diverse.
 2. Testo breve e chiaro, iniziale maiuscola, senza punto finale, senza parole di servizio ("devo", "ricordami di", "aggiungi"). Mantieni nomi, numeri, quantità e dettagli utili. Correggi gli errori evidenti di dettatura.
-3. "due": data YYYY-MM-DD se viene indicato un giorno (oggi, domani, venerdì, il 12…), altrimenti null. Togli l'indicazione temporale dal testo.
+3. "due": data YYYY-MM-DD se viene indicato un giorno (oggi, domani, venerdì, il 12…), altrimenti null.
+4. "time": orario HH:MM (24 ore) se viene indicato un'ora precisa ("alle 16" → "16:00", "alle 4 del pomeriggio" → "16:00", "stasera alle 9" → "21:00", "a mezzogiorno" → "12:00"), altrimenti null. Se c'è l'orario ma non il giorno, lascia "due" null: lo calcola l'app.
+5. "in": se il momento è relativo ("tra 20 minuti" → 20, "fra un'ora" → 60, "tra un quarto d'ora" → 15) metti i minuti da adesso e lascia "due" e "time" null; altrimenti null.
+6. "remind": l'utente vuole essere AVVISATO? Metti quanti minuti PRIMA del momento indicato ("avvisami mezz'ora prima" → 30, "un'ora prima" → 60, "il giorno prima" → 1440, "avvisami alle 16" o "ricordami tra 20 minuti" → 0). Con "in" l'avviso è sempre implicito: 0. Se chiede di essere avvisato per un giorno senza orario ("ricordami domani di…") metti "time" "09:00" e "remind" 0. Se non chiede un avviso: null. "Ricordami di X" senza nessun giorno né orario NON è un avviso: null.
+Togli sempre dal testo le indicazioni di giorno, orario e avviso ("domani", "alle 16", "avvisami mezz'ora prima", "tra 20 minuti").
 
 Rispondi SOLO con JSON valido, senza altro testo:
-{"items":[{"text":"...","list":"...","due":null}],"done":[]}`;
+{"items":[{"text":"...","list":"...","due":null,"time":null,"in":null,"remind":null}],"done":[]}`;
 
   const { text: out } = await chat(settings, [
     { role: 'system', content: system },
@@ -98,6 +106,9 @@ Rispondi SOLO con JSON valido, senza altro testo:
       text: i.text.trim(),
       list: typeof i.list === 'string' ? i.list.trim() : '',
       due: /^\d{4}-\d{2}-\d{2}$/.test(i.due || '') ? i.due : null,
+      time: /^\d{1,2}:\d{2}$/.test(i.time || '') ? i.time.padStart(5, '0') : null,
+      in: mins(i.in) > 0 ? mins(i.in) : null,
+      remind: mins(i.remind) != null && mins(i.remind) >= 0 ? mins(i.remind) : null,
     }));
   const done = [...new Set((Array.isArray(obj.done) ? obj.done : [])
     .map((n) => parseInt(n, 10) - 1)

@@ -14,6 +14,8 @@ const ASSETS = [
   './js/ai.js',
   './js/voice.js',
   './js/icons.js',
+  './js/when.js',
+  './js/reminders.js',
   './manifest.webmanifest',
   './icons/icon.svg',
   './icons/icon-192.png',
@@ -51,6 +53,18 @@ self.addEventListener('fetch', (e) => {
         })
         .catch(() => cached);
       return cached || fresh;
+    })
+  );
+});
+
+// Tocco su un promemoria: riapri MyList (o portala in primo piano)
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = e.notification.data?.url || './';
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      const win = list.find((c) => c.url.startsWith(self.registration.scope));
+      return win ? win.focus() : self.clients.openWindow(url);
     })
   );
 });

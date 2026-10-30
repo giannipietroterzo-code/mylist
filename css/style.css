@@ -537,3 +537,17 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 .tips .ico, .muted .ico { font-size: 14px; vertical-align: -2px; }
 .empty-emo .ico, .empty-emo .li { font-size: 40px; color: var(--accent-ink); }
 .foot a { color: inherit; }
+
+/* ---------- Promemoria ---------- */
+.tag.bell { --c: var(--accent-ink); background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent-ink); }
+.tag.bell .ico { font-size: 12px; }
+.tag.bell.past { background: var(--surface-2); color: var(--text-3); }
+.top-gap-s { margin-top: 8px; }
+.ok-badge { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 999px; background: color-mix(in srgb, #2F9E44 14%, transparent); color: #2F9E44; font-weight: 600; font-size: 14px; }
+.steps { list-style: none; counter-reset: st; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+.steps li { counter-increment: st; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--surface-2); font-size: 14px; color: var(--text); }
+.steps li::before { content: counter(st); flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-weight: 700; font-size: 13px; }
+.steps li > span { flex: 1; min-width: 0; }
+.steps .small-btn { flex: none; height: 34px; padding: 0 12px; font-size: 13px; text-decoration: none; }
+.muted code { background: var(--surface-2); padding: 1px 6px; border-radius: 6px; font-size: 12px; word-break: break-all; }
+.steps .pill-btn.ghost { background: var(--surface); }
