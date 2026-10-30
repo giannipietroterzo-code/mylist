@@ -748,7 +748,7 @@ async function openModelPicker() {
         html += `<h4>Consigliati: veloci ed economici</h4>` + row({ id: 'openrouter/auto', name: 'Auto (sceglie OpenRouter)', prompt: -1, completion: -1 }).replace(/<em>.*<\/em>/, '<em>variabile</em>') + picks.map(row).join('');
         html += `<h4>Tutti i modelli (prezzo per 1M token in · out)</h4>`;
       }
-      const all = models.filter((m) => !q || norm(m.id + ' ' + m.name).includes(q) || (q === 'free' && m.prompt === 0));
+      const all = models.filter((m) => !m.id.endsWith(':batch') && (!q || norm(m.id + ' ' + m.name).includes(q) || (q === 'free' && m.prompt === 0)));
       html += all.sort((a, b) => a.prompt - b.prompt).slice(0, 150).map(row).join('') || '<p class="muted center">Nessun modello trovato</p>';
       $('#mList', root).innerHTML = html;
     };
@@ -1012,7 +1012,20 @@ bind();
 render();
 handleLaunchParams();
 
+// Aggiornamenti: appena il nuovo service worker prende il controllo ricarica la pagina
+// (se stai scrivendo o dettando, mostra invece un avviso con "Aggiorna")
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return;
+    const busy = !$('#voice').hidden || $('#newText').value.trim() || sheet.open;
+    if (busy) return toast('Nuova versione di MyList pronta', 'Aggiorna', () => location.reload());
+    reloading = true;
+    location.reload();
+  });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+  }).catch(() => {});
 }
 navigator.storage?.persist?.();

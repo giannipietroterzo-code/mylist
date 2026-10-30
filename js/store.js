@@ -63,10 +63,12 @@ function read(key, fallback) {
 export const data = read(DATA_KEY, defaultData);
 export const settings = { ...DEFAULT_SETTINGS, ...read(SET_KEY, () => ({})) };
 // v2: l'AI smista anche il testo scritto, non solo la dettatura
+if (/:batch$/.test(settings.model)) settings.model = settings.model.replace(/:batch$/, '');
 if ((settings.sv || 1) < 2) {
   if (settings.aiMode === 'voice') settings.aiMode = 'always';
   settings.sv = 2;
 }
+try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch (e) {}
 
 // Serve sempre almeno una lista; i colori della vecchia palette passano a giallo/grigio
 function normalize() {

@@ -17,7 +17,8 @@ async function chat(settings, messages, { timeout = 20000, maxTokens = 600 } = {
         'X-Title': 'MyList',
       },
       body: JSON.stringify({
-        model: settings.model || 'openrouter/auto',
+        // le varianti :batch non rispondono in tempo reale: usa sempre il modello normale
+        model: (settings.model || 'openrouter/auto').replace(/:batch$/, ''),
         messages,
         temperature: 0,
         max_tokens: maxTokens,

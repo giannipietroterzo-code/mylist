@@ -1,5 +1,5 @@
 // Service worker: app shell offline, aggiornamento in background (stale-while-revalidate)
-const CACHE = 'mylist-v5';
+const CACHE = 'mylist-v6';
 const ASSETS = [
   './',
   './index.html',
@@ -18,7 +18,8 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  // cache: 'reload' = scarica dalla rete, non dalla cache HTTP del browser
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
@@ -39,7 +40,8 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(
     caches.open(CACHE).then(async (cache) => {
       const cached = await cache.match(isNav ? './index.html' : req, { ignoreSearch: isNav });
-      const fresh = fetch(req)
+      // revalida sempre col server (ETag), così l'aggiornamento non aspetta la scadenza della cache HTTP
+      const fresh = fetch(isNav ? './index.html' : req.url, { cache: 'no-cache' })
         .then((res) => {
           if (res.ok) cache.put(isNav ? './index.html' : req, res.clone());
           return res;
