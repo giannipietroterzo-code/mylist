@@ -1,9 +1,11 @@
 // Service worker: app shell offline, aggiornamento in background (stale-while-revalidate)
-const CACHE = 'mylist-v2';
+const CACHE = 'mylist-v3';
 const ASSETS = [
   './',
   './index.html',
   './css/style.css',
+  './vendor/uicons/uicons.css',
+  './vendor/uicons/uicons-regular-rounded.woff2',
   './js/app.js',
   './js/store.js',
   './js/ai.js',

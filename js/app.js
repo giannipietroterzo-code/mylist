@@ -1,7 +1,7 @@
-import { icon } from './icons.js';
+import { icon, listIcon } from './icons.js';
 import {
   data, settings, saveData, saveSettings, snapshot, replaceData, resetAll,
-  uid, norm, findListByName, nextColor, LIST_COLORS, LIST_EMOJIS,
+  uid, norm, findListByName, nextColor, LIST_COLORS, LIST_ICONS,
 } from './store.js';
 import { voiceSupported, listen } from './voice.js';
 import { aiReady, organize, testConnection, listModels } from './ai.js';
@@ -91,7 +91,7 @@ function addItems(entries) {
   buzz(12);
   const lists = [...new Set(added.map((a) => listOf(a).name))];
   const msg = added.length === 1
-    ? `Aggiunta in ${listOf(added[0]).emoji} ${listOf(added[0]).name}`
+    ? `Aggiunta in ${listOf(added[0]).name}`
     : `${added.length} voci → ${lists.join(', ')}`;
   toast(msg, 'Annulla', () => { restore(); render(); });
 }
@@ -119,7 +119,7 @@ async function smartAdd(text, { viaVoice = false } = {}) {
     const entries = res.map((r) => {
       let l = r.list ? findListByName(r.list) : null;
       if (!l && r.list) {
-        l = { id: uid(), name: r.list[0].toUpperCase() + r.list.slice(1), emoji: '📋', color: nextColor() };
+        l = { id: uid(), name: r.list[0].toUpperCase() + r.list.slice(1), icon: 'clipboard-list', color: nextColor() };
         data.lists.push(l);
       }
       return { text: r.text, listId: (l || targetList()).id, due: r.due };
@@ -146,10 +146,10 @@ function render() {
 function renderHeader() {
   const l = currentList();
   const searching = !!ui.search.trim();
-  $('#viewTitle').textContent = searching ? 'Risultati' : l ? `${l.emoji} ${l.name}` : 'Tutte';
+  $('#viewTitle').innerHTML = searching ? 'Risultati' : l ? `<span class="t-ico" style="${cv(l.color)}">${listIcon(l)}</span>${esc(l.name)}` : 'Tutte';
   const n = openCount(l?.id);
   const today = new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
-  $('#viewSub').textContent = `${n ? (n === 1 ? '1 cosa da fare' : `${n} cose da fare`) : 'Tutto fatto ✨'} · ${today}`;
+  $('#viewSub').textContent = `${n ? (n === 1 ? '1 cosa da fare' : `${n} cose da fare`) : 'Tutto fatto'} · ${today}`;
   $('#btnEditList').hidden = !l;
   $('#btnGroup').hidden = !!l || searching;
   $('#btnGroup').innerHTML = icon(settings.grouped ? 'group' : 'flat');
@@ -163,7 +163,7 @@ function renderChips() {
   const ls = data.lists.map((l) => {
     const n = openCount(l.id);
     return `<button class="chip ${settings.view === l.id ? 'on' : ''}" data-view="${l.id}" style="${cv(l.color)}">
-      <span class="chip-emo">${l.emoji}</span>${esc(l.name)}${n ? ` <b>${n}</b>` : ''}</button>`;
+      ${listIcon(l, 'chip-emo')}${esc(l.name)}${n ? ` <b>${n}</b>` : ''}</button>`;
   }).join('');
   chips.innerHTML = all + ls + `<button class="chip add" id="chipAdd" aria-label="Nuova lista">${icon('plus')}</button>`;
   chips.querySelector('.chip.on')?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
@@ -173,7 +173,7 @@ function itemHTML(it, showList) {
   const l = listOf(it);
   const due = dueLabel(it.due);
   const meta = [
-    showList ? `<span class="tag" style="${cv(l.color)}">${l.emoji} ${esc(l.name)}</span>` : '',
+    showList ? `<span class="tag" style="${cv(l.color)}">${listIcon(l)}${esc(l.name)}</span>` : '',
     due && !it.done ? `<span class="tag due ${due.cls}">${icon('calendar')}${due.text}</span>` : '',
   ].join('');
   return `<li class="item ${it.done ? 'is-done' : ''} ${ui.fresh.has(it.id) ? 'pop' : ''}" data-id="${it.id}" style="${cv(l.color)}">
@@ -191,9 +191,9 @@ function itemHTML(it, showList) {
 function emptyHTML() {
   const l = currentList();
   const lines = l
-    ? [`${l.emoji}`, `Niente in ${esc(l.name)}`, 'Scrivi qui sotto o tocca il microfono']
-    : ['☕', 'Niente da fare', 'Goditi il momento, oppure detta la prossima idea'];
-  if (ui.search.trim()) return `<div class="empty"><div class="empty-emo">🔎</div><h2>Nessun risultato</h2><p>Prova con un'altra parola</p></div>`;
+    ? [listIcon(l), `Niente in ${esc(l.name)}`, 'Scrivi qui sotto o tocca il microfono']
+    : [icon('coffee'), 'Niente da fare', 'Goditi il momento, oppure detta la prossima idea'];
+  if (ui.search.trim()) return `<div class="empty"><div class="empty-emo">${icon('search')}</div><h2>Nessun risultato</h2><p>Prova con un'altra parola</p></div>`;
   return `<div class="empty"><div class="empty-emo">${lines[0]}</div><h2>${lines[1]}</h2><p>${lines[2]}</p></div>`;
 }
 
@@ -214,7 +214,7 @@ function renderMain() {
       const its = open.filter((i) => listOf(i).id === l.id);
       if (!its.length) continue;
       html += `<section class="group" style="${cv(l.color)}">
-        <button class="group-h" data-view="${l.id}"><span class="g-emo">${l.emoji}</span>${esc(l.name)}<span class="g-n">${its.length}</span></button>
+        <button class="group-h" data-view="${l.id}"><span class="g-emo">${listIcon(l)}</span>${esc(l.name)}<span class="g-n">${its.length}</span></button>
         <ul class="items">${its.map((i) => itemHTML(i, false)).join('')}</ul></section>`;
     }
   } else {
@@ -237,7 +237,7 @@ function renderMain() {
 function renderComposer() {
   const t = targetList();
   const btn = $('#btnTarget');
-  btn.innerHTML = `<span>${t.emoji}</span>`;
+  btn.innerHTML = listIcon(t);
   btn.style.setProperty('--c', t.color);
   btn.style.setProperty('--on', ink(t.color));
   const ai = aiReady(settings) && settings.aiMode === 'always';
@@ -268,7 +268,7 @@ function toggleDone(id) {
       it.doneAt = Date.now();
       saveData();
       collapseThen(el, render);
-      toast('Fatto! 🎉', 'Annulla', () => { restore(); render(); });
+      toast('Fatto!', 'Annulla', () => { restore(); render(); });
     }, 380);
   } else {
     it.done = false;
@@ -362,7 +362,7 @@ function toggleDoneImmediate(id) {
   saveData();
   buzz(15);
   collapseThen(document.querySelector(`.item[data-id="${id}"]`), render);
-  toast(it.done ? 'Fatto! 🎉' : 'Di nuovo da fare', 'Annulla', () => { restore(); render(); });
+  toast(it.done ? 'Fatto!' : 'Di nuovo da fare', 'Annulla', () => { restore(); render(); });
 }
 
 // ---------- Toast ----------
@@ -433,7 +433,7 @@ function editItem(id) {
     <div class="sheet-head"><h2>Modifica voce</h2><button class="icon-btn" data-close aria-label="Chiudi">${icon('x')}</button></div>
     <textarea id="eText" rows="2" class="field big">${esc(it.text)}</textarea>
     <label class="lbl">Lista</label>
-    <div class="list-pick" id="eList">${data.lists.map((l) => `<button class="chip ${l.id === listOf(it).id ? 'on' : ''}" data-id="${l.id}" style="${cv(l.color)}"><span class="chip-emo">${l.emoji}</span>${esc(l.name)}</button>`).join('')}</div>
+    <div class="list-pick" id="eList">${data.lists.map((l) => `<button class="chip ${l.id === listOf(it).id ? 'on' : ''}" data-id="${l.id}" style="${cv(l.color)}">${listIcon(l, 'chip-emo')}${esc(l.name)}</button>`).join('')}</div>
     <label class="lbl">Scadenza</label>
     <div class="row wrap" id="eDue">
       ${dueOpts.map(([t, v]) => `<button class="chip soft ${it.due === v ? 'on' : ''}" data-due="${v}">${t}</button>`).join('')}
@@ -476,21 +476,21 @@ function editItem(id) {
 // ---------- Crea / modifica lista ----------
 function editList(id) {
   const l = id ? listById(id) : null;
-  const draft = l ? { ...l } : { name: '', emoji: '📋', color: nextColor() };
+  const draft = l ? { ...l } : { name: '', icon: 'clipboard-list', color: nextColor() };
   const count = l ? data.items.filter((i) => listOf(i).id === l.id).length : 0;
   openSheet(`
     <div class="sheet-head"><h2>${l ? 'Modifica lista' : 'Nuova lista'}</h2><button class="icon-btn" data-close aria-label="Chiudi">${icon('x')}</button></div>
     <div class="list-preview" id="lPrev"></div>
     <input id="lName" class="field big" placeholder="Nome della lista" value="${esc(draft.name)}" maxlength="30" autocomplete="off">
     <label class="lbl">Icona</label>
-    <div class="emoji-grid" id="lEmo">${LIST_EMOJIS.map((e) => `<button class="${e === draft.emoji ? 'on' : ''}" data-e="${e}">${e}</button>`).join('')}</div>
+    <div class="emoji-grid" id="lEmo">${LIST_ICONS.map((e) => `<button class="${e === draft.icon ? 'on' : ''}" data-e="${e}" aria-label="${e}">${listIcon({ icon: e })}</button>`).join('')}</div>
     <label class="lbl">Colore</label>
     <div class="swatches" id="lCol">${LIST_COLORS.map((c) => `<button class="${c === draft.color ? 'on' : ''}" data-c="${c}" style="${cv(c)}" aria-label="Colore ${c}"></button>`).join('')}</div>
     <button class="pill-btn wide top-gap" id="lSave">${l ? 'Salva' : 'Crea lista'}</button>
-    ${l ? `<button class="pill-btn wide danger ghost" id="lDel">${icon('trash')}Elimina lista${count ? ` (${count} voci)` : ''}</button>` : ''}
+    ${l ? `<button class="pill-btn wide danger ghost" id="lDel">${icon('trash')}Elimina lista${count ? ` (${count} ${count === 1 ? 'voce' : 'voci'})` : ''}</button>` : ''}
   `, (root) => {
     const prev = () => {
-      $('#lPrev', root).innerHTML = `<span class="chip on" style="${cv(draft.color)}"><span class="chip-emo">${draft.emoji}</span>${esc(draft.name || 'Nuova lista')}</span>`;
+      $('#lPrev', root).innerHTML = `<span class="chip on" style="${cv(draft.color)}">${listIcon(draft, 'chip-emo')}${esc(draft.name || 'Nuova lista')}</span>`;
     };
     prev();
     const name = $('#lName', root);
@@ -500,7 +500,7 @@ function editList(id) {
     $('#lEmo', root).addEventListener('click', (e) => {
       const b = e.target.closest('[data-e]');
       if (!b) return;
-      draft.emoji = b.dataset.e;
+      draft.icon = b.dataset.e;
       root.querySelectorAll('#lEmo button').forEach((x) => x.classList.toggle('on', x === b));
       prev();
     });
@@ -514,9 +514,9 @@ function editList(id) {
     $('#lSave', root).addEventListener('click', () => {
       const n = draft.name.trim();
       if (!n) { name.focus(); name.classList.add('shake'); setTimeout(() => name.classList.remove('shake'), 400); return; }
-      if (l) Object.assign(l, { name: n, emoji: draft.emoji, color: draft.color });
+      if (l) Object.assign(l, { name: n, icon: draft.icon, color: draft.color });
       else {
-        const nl = { id: uid(), name: n, emoji: draft.emoji, color: draft.color };
+        const nl = { id: uid(), name: n, icon: draft.icon, color: draft.color };
         data.lists.push(nl);
         settings.view = nl.id;
         saveSettings();
@@ -552,11 +552,11 @@ function confirmDeleteList(l, count, afterDelete) {
   };
   if (!count) return doDelete(null);
   openSheet(`
-    <div class="sheet-head"><h2>Eliminare ${l.emoji} ${esc(l.name)}?</h2></div>
+    <div class="sheet-head"><h2>Eliminare "${esc(l.name)}"?</h2></div>
     <p class="muted">Contiene ${count} ${count === 1 ? 'voce' : 'voci'}. Cosa ne facciamo?</p>
     <button class="pill-btn wide danger" id="dAll">${icon('trash')}Elimina lista e voci</button>
     <label class="lbl">Oppure sposta le voci in…</label>
-    <div class="list-pick" id="dMove">${others.map((o) => `<button class="chip" data-id="${o.id}" style="${cv(o.color)}"><span class="chip-emo">${o.emoji}</span>${esc(o.name)}</button>`).join('')}</div>
+    <div class="list-pick" id="dMove">${others.map((o) => `<button class="chip" data-id="${o.id}" style="${cv(o.color)}">${listIcon(o, 'chip-emo')}${esc(o.name)}</button>`).join('')}</div>
     <button class="pill-btn wide ghost top-gap" id="dCancel">Annulla</button>
   `, (root) => {
     $('#dAll', root).onclick = () => doDelete(null);
@@ -571,7 +571,7 @@ function manageLists() {
     const its = data.items.filter((i) => listOf(i).id === l.id);
     const n = its.filter((i) => !i.done).length;
     return `<div class="mrow" style="${cv(l.color)}">
-      <span class="m-emo">${l.emoji}</span>
+      <span class="m-emo">${listIcon(l)}</span>
       <span class="m-name"><b>${esc(l.name)}</b><small>${n ? (n === 1 ? '1 da fare' : `${n} da fare`) : its.length ? 'Solo completate' : 'Vuota'}</small></span>
       <button class="icon-btn" data-edit-list="${l.id}" aria-label="Modifica ${esc(l.name)}">${icon('pencil')}</button>
       <button class="icon-btn danger" data-del-list="${l.id}" aria-label="Elimina ${esc(l.name)}">${icon('trash')}</button>
@@ -630,7 +630,7 @@ function openSettings() {
       <select id="sLang" class="field">
         ${[['it-IT', 'Italiano'], ['en-US', 'English (US)'], ['en-GB', 'English (UK)'], ['es-ES', 'Español'], ['fr-FR', 'Français'], ['de-DE', 'Deutsch']].map(([v, t]) => `<option value="${v}" ${settings.lang === v ? 'selected' : ''}>${t}</option>`).join('')}
       </select>
-      ${voiceSupported ? '' : `<p class="muted small">⚠️ Questo browser non supporta la dettatura: usa Chrome su Android, oppure il microfono della tastiera.</p>`}
+      ${voiceSupported ? '' : `<p class="muted small">${icon('warn')} Questo browser non supporta la dettatura: usa Chrome su Android, oppure il microfono della tastiera.</p>`}
     </section>
 
     <section class="card">
@@ -649,7 +649,7 @@ function openSettings() {
       <ul class="tips">
         <li><code>#spesa</code> manda la voce nella lista Spesa</li>
         <li><i>oggi</i>, <i>domani</i>, <i>dopodomani</i> impostano la scadenza</li>
-        <li>Scorri a destra ✓ per completare, a sinistra 🗑 per eliminare</li>
+        <li>Scorri a destra ${icon('check')} per completare, a sinistra ${icon('trash')} per eliminare</li>
         <li>Tieni premuta l'icona dell'app sul telefono → <b>Detta</b> per dettare al volo</li>
       </ul>
     </section>
@@ -663,7 +663,7 @@ function openSettings() {
         <button class="pill-btn ghost danger" id="sReset">${icon('trash')}Azzera tutto</button>
       </div>
     </section>
-    <p class="foot">MyList 1.0 · fatta con ❤️</p>
+    <p class="foot">MyList 1.1 · Icone <a href="https://www.flaticon.com/uicons" target="_blank" rel="noopener">UIcons by Flaticon</a></p>
   `, (root) => {
     const key = $('#sKey', root);
     key.addEventListener('input', () => {
@@ -691,10 +691,10 @@ function openSettings() {
       try {
         const r = await testConnection(settings);
         st.classList.add('ok');
-        st.textContent = `✓ Funziona! ${r.model} ha risposto in ${r.ms} ms`;
+        st.textContent = `Funziona! ${r.model} ha risposto in ${r.ms} ms`;
       } catch (err) {
         st.classList.add('err');
-        st.textContent = `✕ ${err.message}`;
+        st.textContent = `Errore: ${err.message}`;
       }
     };
     $('#sLists', root).onclick = manageLists;
@@ -719,7 +719,7 @@ function openSettings() {
 
 async function openModelPicker() {
   openSheet(`
-    <div class="sheet-head"><button class="icon-btn" id="mBack" aria-label="Indietro">${icon('chevron', 'rot90')}</button><h2>Scegli il modello</h2><span></span></div>
+    <div class="sheet-head"><button class="icon-btn" id="mBack" aria-label="Indietro">${icon('back')}</button><h2>Scegli il modello</h2><span></span></div>
     <div class="search in-sheet"><span class="search-ico">${icon('search')}</span><input id="mSearch" type="search" placeholder="Cerca (es. gemini, gpt, claude, free)…" autocomplete="off"></div>
     <div id="mList" class="models"><p class="muted center">Carico i modelli…</p></div>
   `, async (root) => {
@@ -798,14 +798,14 @@ function applyTheme() {
   if (t === 'auto') delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = t;
   const dark = t === 'dark' || (t === 'auto' && mq.matches);
-  $('#metaTheme').content = dark ? '#121212' : '#F3F3F1';
+  $('#metaTheme').content = dark ? '#121212' : '#FFDA55';
 }
 mq.addEventListener('change', applyTheme);
 
 // ---------- Dettatura ----------
 function startVoice() {
   if (!voiceSupported) {
-    toast('Dettatura non disponibile qui: usa il 🎙️ della tastiera');
+    toast('Dettatura non disponibile qui: usa il microfono della tastiera');
     $('#newText').focus();
     return;
   }
@@ -819,7 +819,7 @@ function startVoice() {
   $('#voiceOrbIco').innerHTML = icon('mic');
   $('#voiceTarget').innerHTML = aiReady(settings) && settings.aiMode !== 'off'
     ? `${icon('sparkles')} L'AI smisterà nelle liste giuste`
-    : `Finisce in <b style="color:${t.color}">${t.emoji} ${esc(t.name)}</b>`;
+    : `Finisce in <b>${listIcon(t)} ${esc(t.name)}</b>`;
   buzz(20);
 
   try {
@@ -876,7 +876,7 @@ function toggleTargetPicker(force) {
   const show = force ?? p.hidden;
   if (!show) { p.classList.remove('show'); setTimeout(() => (p.hidden = true), 180); return; }
   const cur = targetList().id;
-  p.innerHTML = `<p class="picker-title">Aggiungi in…</p>` + data.lists.map((l) => `<button class="${l.id === cur ? 'on' : ''}" data-id="${l.id}" style="${cv(l.color)}"><span>${l.emoji}</span>${esc(l.name)}${l.id === cur ? icon('check') : ''}</button>`).join('');
+  p.innerHTML = `<p class="picker-title">Aggiungi in…</p>` + data.lists.map((l) => `<button class="${l.id === cur ? 'on' : ''}" data-id="${l.id}" style="${cv(l.color)}"><span>${listIcon(l)}</span>${esc(l.name)}${l.id === cur ? icon('check') : ''}</button>`).join('');
   p.hidden = false;
   requestAnimationFrame(() => p.classList.add('show'));
 }

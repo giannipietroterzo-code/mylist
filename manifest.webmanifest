@@ -8,7 +8,7 @@
   "display": "standalone",
   "orientation": "portrait",
   "lang": "it",
-  "background_color": "#F3F3F1",
+  "background_color": "#E3E3DF",
   "theme_color": "#F5B800",
   "categories": ["productivity"],
   "icons": [

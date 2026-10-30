@@ -10,14 +10,15 @@ To-do list per smartphone Android: inserimento rapido, dettatura vocale, liste s
 - **Scorciatoia dalla Home**: tieni premuta l'icona di MyList e scegli **Detta**: si apre già in ascolto.
 - **Condividi verso MyList**: da qualunque app (Chrome, WhatsApp…) usa *Condividi → MyList* per trasformare un testo in una voce.
 - **Liste** con emoji e colore (palette giallo/grigio). Le chip in alto filtrano; **Tutte** mostra tutto, raggruppato per lista oppure in un elenco unico.
-- **Gestisci liste** (icona 🏷 in alto o da Impostazioni): rinomina, cambia colore, elimina. Ogni lista è eliminabile (ne resta sempre almeno una); se contiene voci scegli se eliminarle o spostarle in un'altra lista.
+- **Gestisci liste** (icona etichette in alto o da Impostazioni): rinomina, cambia colore, elimina. Ogni lista è eliminabile (ne resta sempre almeno una); se contiene voci scegli se eliminarle o spostarle in un'altra lista.
 - **Gesti**: scorri a destra per completare, a sinistra per eliminare. C'è sempre **Annulla**.
 - **Sintassi rapida** (anche senza AI):
   - `#spesa` → va nella lista Spesa
   - *oggi*, *domani*, *dopodomani* → scadenza
   - *"nella lista lavoro …"* → funziona anche a voce
 - **Smistamento AI** (opzionale): scrivi o detta una nota libera. L'AI capisce cosa vuoi fare e **dove metterla**: se lo dici ("mettilo nel lavoro", "per casa") usa quella lista, altrimenti sceglie lei la più adatta guardando anche cosa contiene già ogni lista. Più cose nella stessa nota diventano più voci, anche in liste diverse.
-- Tema chiaro/scuro automatico, vibrazioni, animazioni, backup/ripristino in JSON.
+- Tema chiaro (testata gialla su grigio) e scuro (grafite e giallo), vibrazioni, animazioni, backup/ripristino in JSON.
+- Icone: [UIcons by Flaticon](https://www.flaticon.com/uicons) (regular rounded), incluse nell'app per funzionare offline.
 
 ## Metterla sul telefono
 
@@ -54,7 +55,8 @@ js/voice.js             dettatura (Web Speech API)
 js/ai.js                OpenRouter: smistamento, test, elenco modelli
 sw.js                   service worker (offline)
 manifest.webmanifest    installazione, scorciatoie, condivisione
-icons/                  icone (rigenerabili con: node tools/make-icons.mjs)
+icons/                  icone dell'app (rigenerabili con: node tools/make-icons.mjs)
+vendor/uicons/          Flaticon UIcons: solo le icone usate (rigenera con: node tools/build-uicons.mjs)
 ```
 
 ## Sviluppo

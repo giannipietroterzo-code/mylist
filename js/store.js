@@ -5,7 +5,20 @@ const SET_KEY = 'mylist.settings.v1';
 // Palette giallo/grigio: gialli caldi + grigi, distinguibili tra loro
 export const LIST_COLORS = ['#F5B800', '#FFD84D', '#E89B00', '#C9A227', '#3F3F46', '#71717A', '#A1A1AA', '#57534E'];
 const OLD_COLORS = ['#7C5CFF', '#FF5FA2', '#FF8A3D', '#F2B705', '#1FBF75', '#14B8A6', '#3B82F6', '#8B93A7'];
-export const LIST_EMOJIS = ['📥', '🛒', '💼', '🏠', '💡', '📞', '🎁', '💊', '🚗', '✈️', '🎓', '💪', '🐶', '👶', '💰', '📋', '📚', '🎬', '🍝', '🌱', '🔧', '❤️', '🎉', '⭐'];
+// Icone disponibili per le liste (nomi Flaticon UIcons)
+export const LIST_ICONS = [
+  'inbox-in', 'shopping-cart', 'briefcase', 'home', 'bulb', 'phone-call', 'gift', 'medicine',
+  'car-side', 'plane', 'graduation-cap', 'gym', 'paw', 'baby', 'piggy-bank', 'clipboard-list',
+  'book', 'film', 'utensils', 'leaf', 'tools', 'heart', 'glass-cheers', 'star',
+  'users', 'music', 'palette', 'broom', 'coffee', 'globe', 'flame', 'party-horn',
+];
+// Migrazione dalle vecchie emoji
+const EMOJI_TO_ICON = {
+  '📥': 'inbox-in', '🛒': 'shopping-cart', '💼': 'briefcase', '🏠': 'home', '💡': 'bulb', '📞': 'phone-call',
+  '🎁': 'gift', '💊': 'medicine', '🚗': 'car-side', '✈️': 'plane', '🎓': 'graduation-cap', '💪': 'gym',
+  '🐶': 'paw', '👶': 'baby', '💰': 'piggy-bank', '📋': 'clipboard-list', '🧾': 'clipboard-list', '📚': 'book',
+  '🎬': 'film', '🍝': 'utensils', '🌱': 'leaf', '🔧': 'tools', '❤️': 'heart', '🎉': 'glass-cheers', '⭐': 'star',
+};
 
 export const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
@@ -13,13 +26,13 @@ function defaultData() {
   const now = Date.now();
   return {
     lists: [
-      { id: 'inbox', name: 'Inbox', emoji: '📥', color: '#F5B800' },
-      { id: uid(), name: 'Spesa', emoji: '🛒', color: '#E89B00' },
-      { id: uid(), name: 'Lavoro', emoji: '💼', color: '#3F3F46' },
-      { id: uid(), name: 'Casa', emoji: '🏠', color: '#A1A1AA' },
+      { id: 'inbox', name: 'Inbox', icon: 'inbox-in', color: '#F5B800' },
+      { id: uid(), name: 'Spesa', icon: 'shopping-cart', color: '#E89B00' },
+      { id: uid(), name: 'Lavoro', icon: 'briefcase', color: '#3F3F46' },
+      { id: uid(), name: 'Casa', icon: 'home', color: '#A1A1AA' },
     ],
     items: [
-      { id: uid(), text: 'Tocca il microfono e detta la tua prima voce 🎙️', listId: 'inbox', done: false, due: null, createdAt: now },
+      { id: uid(), text: 'Tocca il microfono e detta la tua prima voce', listId: 'inbox', done: false, due: null, createdAt: now },
       { id: uid(), text: 'Scorri a destra per completare, a sinistra per eliminare', listId: 'inbox', done: false, due: null, createdAt: now - 1 },
       { id: uid(), text: 'Scrivi "latte #spesa" per mandarla dritta in una lista', listId: 'inbox', done: false, due: null, createdAt: now - 2 },
     ],
@@ -57,8 +70,10 @@ if ((settings.sv || 1) < 2) {
 
 // Serve sempre almeno una lista; i colori della vecchia palette passano a giallo/grigio
 function normalize() {
-  if (!data.lists.length) data.lists.push({ id: uid(), name: 'Inbox', emoji: '📥', color: LIST_COLORS[0] });
+  if (!data.lists.length) data.lists.push({ id: uid(), name: 'Inbox', icon: 'inbox-in', color: LIST_COLORS[0] });
   data.lists.forEach((l) => {
+    if (!l.icon) l.icon = EMOJI_TO_ICON[l.emoji] || 'clipboard-list';
+    delete l.emoji;
     const i = OLD_COLORS.indexOf(l.color);
     if (i >= 0) l.color = LIST_COLORS[i];
     delete l.fixed;
