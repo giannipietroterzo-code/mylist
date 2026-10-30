@@ -77,7 +77,8 @@ function parseQuick(raw, fallbackListId) {
   return { text, listId, due };
 }
 
-function addItems(entries) {
+// reveal: dopo una dettatura apre la lista dove è finita la nota e la evidenzia
+function addItems(entries, { reveal = false } = {}) {
   const restore = snapshot();
   const now = Date.now();
   const added = [];
@@ -90,8 +91,26 @@ function addItems(entries) {
   });
   if (!added.length) return;
   saveData();
+  if (reveal) {
+    const ids = [...new Set(added.map((a) => listOf(a).id))];
+    const view = ids.length === 1 ? ids[0] : 'all';
+    if (settings.view !== view) {
+      settings.view = view;
+      if (view !== 'all') settings.target = view;
+      saveSettings();
+    }
+    ui.search = '';
+  }
   render();
   buzz(12);
+  if (reveal) {
+    requestAnimationFrame(() => {
+      const els = added.map((a) => document.querySelector(`.item[data-id="${a.id}"]`)).filter(Boolean);
+      els[0]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      els.forEach((el) => el.classList.add('flash'));
+      setTimeout(() => els.forEach((el) => el.classList.remove('flash')), 2400);
+    });
+  }
   const lists = [...new Set(added.map((a) => listOf(a).name))];
   const msg = added.length === 1
     ? `Aggiunta in ${listOf(added[0]).name}`
@@ -104,7 +123,7 @@ async function smartAdd(text, { viaVoice = false } = {}) {
   const useAI = aiReady(settings) && (settings.aiMode === 'always' || (settings.aiMode === 'voice' && viaVoice));
   // Se l'utente ha usato #lista esplicitamente, non serve l'AI
   if (!useAI || /\s?#[\p{L}]/u.test(text)) {
-    addItems([parseQuick(text, targetList().id)]);
+    addItems([parseQuick(text, targetList().id)], { reveal: viaVoice });
     return;
   }
   const composer = $('#composer');
@@ -127,10 +146,10 @@ async function smartAdd(text, { viaVoice = false } = {}) {
       }
       return { text: r.text, listId: (l || targetList()).id, due: r.due };
     });
-    addItems(entries);
+    addItems(entries, { reveal: viaVoice });
   } catch (err) {
     console.warn(err);
-    addItems([parseQuick(text, targetList().id)]);
+    addItems([parseQuick(text, targetList().id)], { reveal: viaVoice });
     toast(`AI non disponibile: aggiunta così com'è (${err.message})`);
   } finally {
     composer.classList.remove('thinking');
@@ -308,25 +327,34 @@ function collapseThen(el, fn) {
 function setupSwipe() {
   const main = $('#main');
   let sw = null;
-  const TH = 90;
+  const TH = 80; // distanza per confermare
+  const FLICK = 0.45; // px/ms: una passata veloce conferma anche se corta
+  const FLICK_MIN = 40;
 
   main.addEventListener('pointerdown', (e) => {
     const body = e.target.closest('.item-body');
-    if (!body || e.target.closest('button') || e.button > 0) return;
-    sw = { body, li: body.parentElement, x0: e.clientX, y0: e.clientY, dx: 0, on: false, pid: e.pointerId };
+    // si può partire ovunque sulla voce, anche dal cerchietto (il tocco semplice resta un clic)
+    if (!body || e.button > 0 || body.closest('.item.collapse')) return;
+    sw = { body, li: body.parentElement, x0: e.clientX, y0: e.clientY, dx: 0, on: false, pid: e.pointerId, t: e.timeStamp, x: e.clientX, v: 0 };
   });
   main.addEventListener('pointermove', (e) => {
-    if (!sw) return;
+    if (!sw || e.pointerId !== sw.pid) return;
     const dx = e.clientX - sw.x0;
     const dy = e.clientY - sw.y0;
     if (!sw.on) {
-      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+      // orizzontale appena prevale sul verticale (anche in diagonale)
+      if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) {
         sw.on = true;
-        sw.body.setPointerCapture(sw.pid);
+        try { sw.body.setPointerCapture(sw.pid); } catch (err) {}
         sw.li.classList.add('swiping');
-      } else if (Math.abs(dy) > 10) { sw = null; return; }
+        window.getSelection?.().removeAllRanges();
+      } else if (Math.abs(dy) > 12) { sw = null; return; }
     }
     if (sw.on) {
+      const dt = e.timeStamp - sw.t;
+      if (dt > 0) sw.v = 0.7 * ((e.clientX - sw.x) / dt) + 0.3 * sw.v;
+      sw.t = e.timeStamp;
+      sw.x = e.clientX;
       sw.dx = dx;
       sw.body.style.transform = `translateX(${dx}px)`;
       sw.li.dataset.dir = dx > 0 ? 'right' : 'left';
@@ -334,15 +362,16 @@ function setupSwipe() {
       if (armed !== sw.li.classList.contains('armed')) { buzz(5); sw.li.classList.toggle('armed', armed); }
     }
   });
-  const end = () => {
-    if (!sw) return;
-    const { body, li, dx, on } = sw;
+  const end = (e) => {
+    if (!sw || (e && e.pointerId !== sw.pid)) return;
+    const { body, li, dx, on, v } = sw;
     sw = null;
     if (!on) return;
     ui.suppressClick = true;
-    setTimeout(() => (ui.suppressClick = false), 50);
+    setTimeout(() => (ui.suppressClick = false), 80);
     li.classList.remove('swiping');
-    if (Math.abs(dx) > TH) {
+    const flick = Math.abs(v) > FLICK && Math.abs(dx) > FLICK_MIN && Math.sign(v) === Math.sign(dx);
+    if (Math.abs(dx) > TH || flick) {
       body.style.transition = 'transform .2s ease';
       body.style.transform = `translateX(${dx > 0 ? 110 : -110}%)`;
       const id = li.dataset.id;
@@ -355,6 +384,8 @@ function setupSwipe() {
   };
   main.addEventListener('pointerup', end);
   main.addEventListener('pointercancel', end);
+  // niente menu/selezione del testo con la pressione lunga sulle voci
+  main.addEventListener('contextmenu', (e) => { if (e.target.closest('.item-body')) e.preventDefault(); });
 }
 
 function toggleDoneImmediate(id) {
@@ -806,7 +837,7 @@ function applyTheme() {
   if (t === 'auto') delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = t;
   const dark = t === 'dark' || (t === 'auto' && mq.matches);
-  $('#metaTheme').content = dark ? '#121212' : '#E3E3DF';
+  $('#metaTheme').content = dark ? '#1E1E1E' : '#F7F7F5'; // come la fascia dell'intestazione
 }
 mq.addEventListener('change', applyTheme);
 

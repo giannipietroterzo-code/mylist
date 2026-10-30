@@ -6,12 +6,12 @@ To-do list per smartphone Android: inserimento rapido, dettatura vocale, liste s
 ## Cosa fa
 
 - **Inserimento lampo**: barra fissa in basso. Scrivi e premi Invio; il campo resta pronto per la voce successiva.
-- **Dettatura con invio automatico**: con il campo vuoto il pulsante tondo è un microfono. Lo tocchi e parli: quando smetti, una barra si svuota e la nota parte da sola. Se ti fermi su una frase lasciata a metà ("compra il latte e…") aspetta di più. Pausa regolabile in Impostazioni (Breve / Normale / Lunga); "Invia ora" per non aspettare.
+- **Dettatura con invio automatico**: con il campo vuoto il pulsante tondo è un microfono. Lo tocchi e parli: quando smetti, una barra si svuota e la nota parte da sola. Se ti fermi su una frase lasciata a metà ("compra il latte e…") aspetta di più. Pausa regolabile in Impostazioni (Breve / Normale / Lunga); "Invia ora" per non aspettare. Dopo l'invio si apre la lista dove è finita la nota, evidenziata.
 - **Scorciatoia dalla Home**: tieni premuta l'icona di MyList e scegli **Detta**: si apre già in ascolto.
 - **Condividi verso MyList**: da qualunque app (Chrome, WhatsApp…) usa *Condividi → MyList* per trasformare un testo in una voce.
 - **Liste** con emoji e colore (palette giallo/grigio). Le chip in alto filtrano; **Tutte** mostra tutto, raggruppato per lista oppure in un elenco unico.
 - **Gestisci liste** (icona etichette in alto o da Impostazioni): rinomina, cambia colore, elimina. Ogni lista è eliminabile (ne resta sempre almeno una); se contiene voci scegli se eliminarle o spostarle in un'altra lista.
-- **Gesti**: scorri a destra per completare, a sinistra per eliminare. C'è sempre **Annulla**.
+- **Gesti**: scorri a destra per completare, a sinistra per eliminare (basta anche una passata veloce, da qualunque punto della voce). C'è sempre **Annulla**.
 - **Sintassi rapida** (anche senza AI):
   - `#spesa` → va nella lista Spesa
   - *oggi*, *domani*, *dopodomani* → scadenza
@@ -56,7 +56,7 @@ js/voice.js             dettatura (Web Speech API)
 js/ai.js                OpenRouter: smistamento, test, elenco modelli
 sw.js                   service worker (offline)
 manifest.webmanifest    installazione, scorciatoie, condivisione
-icons/                  logo e icone dell'app: microfono disegnato a mano (rigenerabili con: node tools/make-icons.mjs)
+icons/                  logo (onda vocale + spunta) e icone dell'app, disegnati a mano (rigenerabili con: node tools/make-icons.mjs)
 vendor/uicons/          Flaticon UIcons: solo le icone usate (rigenera con: node tools/build-uicons.mjs)
 ```
 

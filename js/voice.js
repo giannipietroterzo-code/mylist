@@ -1,7 +1,7 @@
 // Dettatura con la Web Speech API (Chrome Android la supporta nativamente).
 // La fine della frase la decidiamo noi: dopo una pausa di silenzio l'ascolto si chiude e la nota parte da sola.
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-export const voiceSupported = !!SR;
+const getSR = () => window.SpeechRecognition || window.webkitSpeechRecognition;
+export const voiceSupported = !!getSR();
 
 // Parole che lasciano la frase in sospeso: se la pausa arriva dopo una di queste, aspettiamo di più
 const DANGLING = new Set([
@@ -24,6 +24,7 @@ export const sentenceLooksOpen = (t) => DANGLING.has(lastWord(t));
  *  - onDone(testo, errore)  ascolto finito: testo definitivo
  */
 export function listen({ lang = 'it-IT', pauseMs = 1500, onText, onPause, onDone }) {
+  const SR = getSR();
   const r = new SR();
   r.lang = lang;
   r.interimResults = true;

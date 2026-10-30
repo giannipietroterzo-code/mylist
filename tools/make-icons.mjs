@@ -81,8 +81,16 @@ function render(size, scene, ss = 4) {
   return png(size, size, buf);
 }
 
-// Logo: microfono grafite su giallo (disegno originale: capsula con griglia, supporto a U, asta e base)
+// Logo: onda vocale + spunta, grafite su giallo (detti la nota → diventa una cosa fatta)
 const W = 17; // metà spessore del tratto
+function logoShape(X, Y) {
+  X += 8; // centratura ottica
+  const wave = Math.min(segDist(X, Y, 130, 224, 130, 288), segDist(X, Y, 180, 176, 180, 336), segDist(X, Y, 230, 208, 230, 304));
+  const check = Math.min(segDist(X, Y, 276, 262, 320, 306), segDist(X, Y, 320, 306, 398, 204));
+  return Math.min(wave, check) - W;
+}
+
+// Microfono (icona della scorciatoia "Detta")
 function micShape(X, Y) {
   const capsule = Math.abs(roundRect(X, Y, 191, 112, 130, 200, 65)) - W;
   const grille = Math.min(
@@ -99,7 +107,7 @@ function micShape(X, Y) {
 // s = scala del disegno (per le icone "maskable" serve margine)
 function logo(px, py, bgAlpha, s = 1) {
   const X = (px - 256) / s + 256, Y = (py - 256) / s + 256;
-  if (micShape(X, Y) <= 0) return INK;
+  if (logoShape(X, Y) <= 0) return INK;
   return [...grad(), bgAlpha];
 }
 
