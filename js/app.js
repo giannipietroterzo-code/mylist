@@ -741,7 +741,8 @@ async function openModelPicker() {
       let html = '';
       if (!q) {
         const picks = models
-          .filter((m) => /flash|mini|haiku|small|lite|nano/i.test(m.id) && m.prompt > 0 && m.prompt < 1 && !/image|audio|vision|embed/i.test(m.id))
+          // niente varianti :batch (lente) né alias ~…-latest (cambiano modello da soli)
+          .filter((m) => !m.id.includes(':') && !m.id.startsWith('~') && /flash|mini|haiku|small|lite|nano/i.test(m.id) && m.prompt > 0 && m.prompt < 1 && !/image|audio|vision|embed/i.test(m.id))
           .sort((a, b) => b.created - a.created)
           .slice(0, 8);
         html += `<h4>Consigliati: veloci ed economici</h4>` + row({ id: 'openrouter/auto', name: 'Auto (sceglie OpenRouter)', prompt: -1, completion: -1 }).replace(/<em>.*<\/em>/, '<em>variabile</em>') + picks.map(row).join('');
