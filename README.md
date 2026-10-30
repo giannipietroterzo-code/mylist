@@ -6,7 +6,7 @@ To-do list per smartphone Android: inserimento rapido, dettatura vocale, liste s
 ## Cosa fa
 
 - **Inserimento lampo**: barra fissa in basso. Scrivi e premi Invio; il campo resta pronto per la voce successiva.
-- **Dettatura**: con il campo vuoto il pulsante tondo è un microfono 🎙️. Lo tocchi, parli e la voce viene aggiunta.
+- **Dettatura con invio automatico**: con il campo vuoto il pulsante tondo è un microfono. Lo tocchi e parli: quando smetti, una barra si svuota e la nota parte da sola. Se ti fermi su una frase lasciata a metà ("compra il latte e…") aspetta di più. Pausa regolabile in Impostazioni (Breve / Normale / Lunga); "Invia ora" per non aspettare.
 - **Scorciatoia dalla Home**: tieni premuta l'icona di MyList e scegli **Detta**: si apre già in ascolto.
 - **Condividi verso MyList**: da qualunque app (Chrome, WhatsApp…) usa *Condividi → MyList* per trasformare un testo in una voce.
 - **Liste** con emoji e colore (palette giallo/grigio). Le chip in alto filtrano; **Tutte** mostra tutto, raggruppato per lista oppure in un elenco unico.
@@ -17,7 +17,7 @@ To-do list per smartphone Android: inserimento rapido, dettatura vocale, liste s
   - *oggi*, *domani*, *dopodomani* → scadenza
   - *"nella lista lavoro …"* → funziona anche a voce
 - **Smistamento AI** (opzionale): scrivi o detta una nota libera. L'AI capisce cosa vuoi fare e **dove metterla**: se lo dici ("mettilo nel lavoro", "per casa") usa quella lista, altrimenti sceglie lei la più adatta guardando anche cosa contiene già ogni lista. Più cose nella stessa nota diventano più voci, anche in liste diverse.
-- Tema chiaro (testata gialla su grigio) e scuro (grafite e giallo), vibrazioni, animazioni, backup/ripristino in JSON.
+- Grafica piatta a tinta unita: tema chiaro (testata gialla su grigio) e scuro (grafite e giallo), vibrazioni, animazioni, backup/ripristino in JSON.
 - Icone: [UIcons by Flaticon](https://www.flaticon.com/uicons) (regular rounded), incluse nell'app per funzionare offline.
 
 ## Metterla sul telefono

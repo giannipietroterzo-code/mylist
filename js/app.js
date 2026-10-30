@@ -4,6 +4,8 @@ import {
   uid, norm, findListByName, nextColor, LIST_COLORS, LIST_ICONS,
 } from './store.js';
 import { voiceSupported, listen } from './voice.js';
+
+const PAUSE_MS = { short: 900, normal: 1500, long: 2500 };
 import { aiReady, organize, testConnection, listModels } from './ai.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -630,6 +632,9 @@ function openSettings() {
       <select id="sLang" class="field">
         ${[['it-IT', 'Italiano'], ['en-US', 'English (US)'], ['en-GB', 'English (UK)'], ['es-ES', 'Español'], ['fr-FR', 'Français'], ['de-DE', 'Deutsch']].map(([v, t]) => `<option value="${v}" ${settings.lang === v ? 'selected' : ''}>${t}</option>`).join('')}
       </select>
+      <label class="lbl">Pausa prima dell'invio automatico</label>
+      ${seg('pause', settings.pause, [['short', 'Breve'], ['normal', 'Normale'], ['long', 'Lunga']])}
+      <p class="muted small">Quando smetti di parlare la nota parte da sola. Se ti fermi a metà frase ("compra il latte e…") aspetto un po' di più.</p>
       ${voiceSupported ? '' : `<p class="muted small">${icon('warn')} Questo browser non supporta la dettatura: usa Chrome su Android, oppure il microfono della tastiera.</p>`}
     </section>
 
@@ -799,7 +804,7 @@ function applyTheme() {
   if (t === 'auto') delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = t;
   const dark = t === 'dark' || (t === 'auto' && mq.matches);
-  $('#metaTheme').content = dark ? '#121212' : '#FFDA55';
+  $('#metaTheme').content = dark ? '#121212' : '#F5B800';
 }
 mq.addEventListener('change', applyTheme);
 
@@ -826,7 +831,18 @@ function startVoice() {
   try {
     ui.voice = listen({
       lang: settings.lang,
+      pauseMs: PAUSE_MS[settings.pause] || PAUSE_MS.normal,
       onText: (txt) => { $('#voiceText').textContent = txt; },
+      // Conto alla rovescia visibile: quando la barra si svuota la nota parte da sola
+      onPause: (ms) => {
+        const bar = $('#voiceBar');
+        bar.classList.remove('run');
+        if (!ms) { $('#voiceHint').textContent = 'Ti ascolto…'; return; }
+        $('#voiceHint').textContent = 'Invio automatico…';
+        bar.style.setProperty('--ms', ms + 'ms');
+        void bar.offsetWidth;
+        bar.classList.add('run');
+      },
       onDone: async (txt, err) => {
         ui.voice = null;
         if (!txt) {

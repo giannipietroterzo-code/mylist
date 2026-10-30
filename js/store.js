@@ -45,6 +45,7 @@ export const DEFAULT_SETTINGS = {
   aiMode: 'always', // always | voice | off
   theme: 'auto', // auto | light | dark
   lang: 'it-IT',
+  pause: 'normal', // short | normal | long: silenzio prima dell'invio automatico
   grouped: true,
   showDone: false,
   view: 'all',
