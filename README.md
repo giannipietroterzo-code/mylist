@@ -11,6 +11,7 @@ To-do list per smartphone Android: inserimento rapido, dettatura vocale, liste s
 - **Condividi verso MyList**: da qualunque app (Chrome, WhatsApp…) usa *Condividi → MyList* per trasformare un testo in una voce.
 - **Liste** con emoji e colore (palette giallo/grigio). Le chip in alto filtrano; **Tutte** mostra tutto, raggruppato per lista oppure in un elenco unico.
 - **Gestisci liste** (icona etichette in alto o da Impostazioni): rinomina, cambia colore, elimina. Ogni lista è eliminabile (ne resta sempre almeno una); se contiene voci scegli se eliminarle o spostarle in un'altra lista.
+- **Spunta a voce**: di' o scrivi cosa hai già fatto ("ho preso le patate", "comprato il latte e il pane", "la lavatrice è fatta") e MyList spunta la voce corrispondente ("Prendere le patate") invece di crearne una nuova. Con l'AI capisce anche frasi miste ("ho preso le patate, devo comprare le uova"); senza AI funziona lo stesso con un riconoscimento locale. Se non trova niente da spuntare te lo dice e ti propone di aggiungerla.
 - **Gesti**: scorri a destra per completare, a sinistra per eliminare (basta anche una passata veloce, da qualunque punto della voce). C'è sempre **Annulla**.
 - **Sintassi rapida** (anche senza AI):
   - `#spesa` → va nella lista Spesa

@@ -77,8 +77,49 @@ function parseQuick(raw, fallbackListId) {
   return { text, listId, due };
 }
 
+// ---------- "Ho preso le patate" → spunta "Prendere le patate" (anche senza AI) ----------
+// Frasi al passato: "ho preso…", "abbiamo pagato…", "comprato il latte", "fatta la lavatrice", "spunta il pane", "la spesa è fatta"
+const DONE_HEAD = /^(?:ok|okay|ecco|allora|bene)?[\s,]*(?:(?:ho|abbiamo|hai)\s+(?:già\s+|appena\s+|finalmente\s+)?\p{L}+[ts][oaie]|\p{L}+(?:at|ut|it)[oaie]|fatt[oaie]|pres[oaie]|mess[oaie]|scritt[oaie]|spunta|completa|segna)(?=[\s,:.!]|$)/iu;
+const DONE_TAIL = /\s+(?:è\s+|sono\s+)?(?:fatt[oaie]|complet[ao]t[oaie]|finit[oaie]|pres[oaie]|comprat[oaie]|sistemat[oaie])(?:\s+come\s+fatt[oaie])?[.!]*$/iu;
+const STOP = new Set(['del', 'della', 'dello', 'dei', 'degli', 'delle', 'dal', 'dalla', 'dai', 'nel', 'nella', 'nei', 'nelle', 'per', 'con', 'sul', 'sulla', 'tra', 'fra',
+  'che', 'una', 'uno', 'gli', 'alla', 'allo', 'agli', 'alle', 'mio', 'mia', 'miei', 'mie', 'tuo', 'tua', 'suo', 'sua', 'poi', 'anche', 'gia', 'ancora',
+  'tutto', 'tutta', 'tutti', 'tutte', 'quel', 'quella', 'quello', 'questo', 'questa', 'ora', 'adesso', 'oggi', 'come', 'fatto', 'fatta', 'lista']);
+const stem = (w) => (w.length > 4 ? w.slice(0, -2) : w);
+const words = (t) => norm(t).split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 2 && !STOP.has(w));
+const looksDone = (t) => DONE_HEAD.test(t.trim()) || DONE_TAIL.test(t.trim());
+
+// null = non è una frase "già fatto"; altrimenti gli id delle voci aperte che corrispondono (può essere vuoto)
+function findDoneLocally(text) {
+  const t = text.trim();
+  if (!looksDone(t)) return null;
+  const rest = t.replace(DONE_HEAD, '').replace(DONE_TAIL, '');
+  const open = data.items.filter((i) => !i.done);
+  const cur = currentList()?.id;
+  const ids = new Set();
+  for (const part of rest.split(/\s*(?:,|;|\be\b|\bed\b|\bpoi\b|\banche\b)\s*/iu)) {
+    let ws = words(part);
+    // "fatto: comprare il latte" → conta il latte, il verbo all'infinito può mancare nella voce
+    const nouns = ws.filter((w) => !/(?:are|ere|ire)$/.test(w));
+    if (nouns.length) ws = nouns;
+    if (!ws.length) continue;
+    const need = ws.map(stem);
+    let best = null;
+    for (const it of open) {
+      if (ids.has(it.id)) continue;
+      const have = new Set(words(it.text).map(stem));
+      if (!need.every((w) => have.has(w))) continue;
+      // la voce più "aderente" (meno parole in più), poi quella nella lista aperta, poi la più recente
+      const score = need.length / Math.max(have.size, 1) + (listOf(it).id === cur ? 0.01 : 0) + it.createdAt / 1e16;
+      if (!best || score > best.score) best = { id: it.id, score };
+    }
+    if (best) ids.add(best.id);
+  }
+  return [...ids];
+}
+
 // reveal: dopo una dettatura apre la lista dove è finita la nota e la evidenzia
-function addItems(entries, { reveal = false } = {}) {
+// done: id di voci già esistenti da spuntare ("ho preso le patate")
+function addItems(entries, { reveal = false, done = [] } = {}) {
   const restore = snapshot();
   const now = Date.now();
   const added = [];
@@ -89,10 +130,11 @@ function addItems(entries, { reveal = false } = {}) {
     ui.fresh.add(it.id);
     added.push(it);
   });
-  if (!added.length) return;
-  saveData();
+  const finishing = done.map((id) => data.items.find((i) => i.id === id && !i.done)).filter(Boolean);
+  if (!added.length && !finishing.length) return;
+  if (added.length) saveData();
   if (reveal) {
-    const ids = [...new Set(added.map((a) => listOf(a).id))];
+    const ids = [...new Set([...added, ...finishing].map((a) => listOf(a).id))];
     const view = ids.length === 1 ? ids[0] : 'all';
     if (settings.view !== view) {
       settings.view = view;
@@ -103,19 +145,46 @@ function addItems(entries, { reveal = false } = {}) {
   }
   render();
   buzz(12);
-  if (reveal) {
-    requestAnimationFrame(() => {
-      const els = added.map((a) => document.querySelector(`.item[data-id="${a.id}"]`)).filter(Boolean);
-      els[0]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      els.forEach((el) => el.classList.add('flash'));
-      setTimeout(() => els.forEach((el) => el.classList.remove('flash')), 2400);
-    });
-  }
+  let undone = false;
+  const undo = () => { undone = true; restore(); render(); };
+  requestAnimationFrame(() => {
+    const find = (arr) => arr.map((a) => document.querySelector(`.item[data-id="${a.id}"]`)).filter(Boolean);
+    const els = reveal ? find(added) : [];
+    const fin = find(finishing);
+    if (reveal) (els[0] || fin[0])?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    els.forEach((el) => el.classList.add('flash'));
+    setTimeout(() => els.forEach((el) => el.classList.remove('flash')), 2400);
+    if (!finishing.length) return;
+    // le voci si spuntano sotto i tuoi occhi, poi spariscono tra le completate
+    fin.forEach((el) => el.classList.add('completing'));
+    setTimeout(() => {
+      if (undone) return;
+      finishing.forEach((it) => { it.done = true; it.doneAt = Date.now(); });
+      saveData();
+      if (!fin.length) return render();
+      fin.forEach((el, i) => collapseThen(el, i ? () => {} : render));
+    }, fin.length ? (reveal ? 900 : 550) : 0);
+  });
   const lists = [...new Set(added.map((a) => listOf(a).name))];
-  const msg = added.length === 1
-    ? `Aggiunta in ${listOf(added[0]).name}`
-    : `${added.length} voci → ${lists.join(', ')}`;
-  toast(msg, 'Annulla', () => { restore(); render(); });
+  const addMsg = !added.length ? ''
+    : added.length === 1 ? `Aggiunta in ${listOf(added[0]).name}` : `${added.length} voci → ${lists.join(', ')}`;
+  const doneMsg = !finishing.length ? ''
+    : finishing.length === 1 ? (added.length ? '1 completata' : `Fatto: ${finishing[0].text}`) : `${finishing.length} completate`;
+  toast([addMsg, doneMsg].filter(Boolean).join(' · '), 'Annulla', undo);
+}
+
+// "Ho fatto X" ma X non c'è tra le cose da fare
+function notFound(text, viaVoice) {
+  toast('Non trovo una voce da spuntare', 'Aggiungi', () => addItems([parseQuick(text, targetList().id)], { reveal: viaVoice }));
+}
+
+// Le cose ancora da fare che l'AI può spuntare: prima la lista aperta, poi le più recenti
+function todoForAI() {
+  const cur = currentList()?.id;
+  return data.items
+    .filter((i) => !i.done)
+    .sort((a, b) => (listOf(b).id === cur) - (listOf(a).id === cur) || b.createdAt - a.createdAt)
+    .slice(0, 150);
 }
 
 // Usa l'AI per smistare, con fallback automatico al parser locale
@@ -123,7 +192,10 @@ async function smartAdd(text, { viaVoice = false } = {}) {
   const useAI = aiReady(settings) && (settings.aiMode === 'always' || (settings.aiMode === 'voice' && viaVoice));
   // Se l'utente ha usato #lista esplicitamente, non serve l'AI
   if (!useAI || /\s?#[\p{L}]/u.test(text)) {
-    addItems([parseQuick(text, targetList().id)], { reveal: viaVoice });
+    const done = /#/.test(text) ? null : findDoneLocally(text);
+    if (done?.length) addItems([], { done, reveal: viaVoice });
+    else if (done) notFound(text, viaVoice);
+    else addItems([parseQuick(text, targetList().id)], { reveal: viaVoice });
     return;
   }
   const composer = $('#composer');
@@ -136,9 +208,17 @@ async function smartAdd(text, { viaVoice = false } = {}) {
       name: l.name,
       examples: data.items.filter((i) => i.listId === l.id).sort((a, b) => b.createdAt - a.createdAt).slice(0, 4).map((i) => i.text.slice(0, 60)),
     }));
-    const res = await organize(text, lists, settings, { openList: currentList()?.name, fallback: targetList().name });
-    if (!res.length) throw new Error('Nessuna voce trovata');
-    const entries = res.map((r) => {
+    const todo = todoForAI();
+    const res = await organize(text, lists, settings, {
+      openList: currentList()?.name,
+      fallback: targetList().name,
+      todo: todo.map((i) => ({ text: i.text.slice(0, 80), list: listOf(i).name })),
+    });
+    if (!res.items.length && !res.done.length) {
+      if (looksDone(text)) return notFound(text, viaVoice);
+      throw new Error('Nessuna voce trovata');
+    }
+    const entries = res.items.map((r) => {
       let l = r.list ? findListByName(r.list) : null;
       if (!l && r.list) {
         l = { id: uid(), name: r.list[0].toUpperCase() + r.list.slice(1), icon: 'clipboard-list', color: nextColor() };
@@ -146,11 +226,13 @@ async function smartAdd(text, { viaVoice = false } = {}) {
       }
       return { text: r.text, listId: (l || targetList()).id, due: r.due };
     });
-    addItems(entries, { reveal: viaVoice });
+    addItems(entries, { reveal: viaVoice, done: res.done.map((n) => todo[n].id) });
   } catch (err) {
     console.warn(err);
-    addItems([parseQuick(text, targetList().id)], { reveal: viaVoice });
-    toast(`AI non disponibile: aggiunta così com'è (${err.message})`);
+    const done = findDoneLocally(text);
+    if (done?.length) addItems([], { done, reveal: viaVoice });
+    else addItems([parseQuick(text, targetList().id)], { reveal: viaVoice });
+    toast(`AI non disponibile: ${done?.length ? 'spuntata col riconoscimento locale' : "aggiunta così com'è"} (${err.message})`);
   } finally {
     composer.classList.remove('thinking');
     updateGoButton();
