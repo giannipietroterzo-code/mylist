@@ -1,5 +1,5 @@
 // Service worker: app shell offline, aggiornamento in background (stale-while-revalidate)
-const CACHE = 'mylist-v1';
+const CACHE = 'mylist-v2';
 const ASSETS = [
   './',
   './index.html',

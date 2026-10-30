@@ -9,14 +9,14 @@ To-do list per smartphone Android: inserimento rapido, dettatura vocale, liste s
 - **Dettatura**: con il campo vuoto il pulsante tondo è un microfono 🎙️. Lo tocchi, parli e la voce viene aggiunta.
 - **Scorciatoia dalla Home**: tieni premuta l'icona di MyList e scegli **Detta**: si apre già in ascolto.
 - **Condividi verso MyList**: da qualunque app (Chrome, WhatsApp…) usa *Condividi → MyList* per trasformare un testo in una voce.
-- **Liste** con emoji e colore. Le chip in alto filtrano; **Tutte** mostra tutto, raggruppato per lista oppure in un elenco unico.
+- **Liste** con emoji e colore (palette giallo/grigio). Le chip in alto filtrano; **Tutte** mostra tutto, raggruppato per lista oppure in un elenco unico.
+- **Gestisci liste** (icona 🏷 in alto o da Impostazioni): rinomina, cambia colore, elimina. Ogni lista è eliminabile (ne resta sempre almeno una); se contiene voci scegli se eliminarle o spostarle in un'altra lista.
 - **Gesti**: scorri a destra per completare, a sinistra per eliminare. C'è sempre **Annulla**.
 - **Sintassi rapida** (anche senza AI):
   - `#spesa` → va nella lista Spesa
-  - `!` oppure *urgente* → importante ⭐
   - *oggi*, *domani*, *dopodomani* → scadenza
   - *"nella lista lavoro …"* → funziona anche a voce
-- **Smistamento AI** (opzionale): detti *"latte, uova e domani chiamare il commercialista"* e ottieni 3 voci, ognuna nella lista giusta e con la scadenza.
+- **Smistamento AI** (opzionale): scrivi o detta una nota libera. L'AI capisce cosa vuoi fare e **dove metterla**: se lo dici ("mettilo nel lavoro", "per casa") usa quella lista, altrimenti sceglie lei la più adatta guardando anche cosa contiene già ogni lista. Più cose nella stessa nota diventano più voci, anche in liste diverse.
 - Tema chiaro/scuro automatico, vibrazioni, animazioni, backup/ripristino in JSON.
 
 ## Metterla sul telefono
@@ -37,11 +37,11 @@ Per l'installazione e per il microfono serve **HTTPS**. Il modo più rapido, gra
 2. In MyList: ⚙️ **Impostazioni → Smistamento intelligente** → incolla la chiave.
 3. **Modello**: tocca il campo e scegli dall'elenco (caricato in tempo reale da OpenRouter, con i prezzi). In cima ci sono i consigliati veloci ed economici; per questo compito basta un modello piccolo: costa frazioni di centesimo a voce.
 4. **Prova connessione** per verificare.
-5. **Quando usarlo**: *Solo dettatura* (default: il testo scritto resta istantaneo), *Sempre* o *Mai*.
+5. **Quando usarlo**: *Sempre* (default: testo scritto e dettato), *Solo dettatura* o *Mai*. Scrivere `#lista` salta l'AI e va dritto in quella lista.
 
 Se l'AI non risponde, la voce viene aggiunta comunque, così com'è, nella lista corrente.
 
-**Privacy**: liste e chiave restano solo nel `localStorage` del telefono. All'AI viene inviata solo la frase dettata e i nomi delle liste.
+**Privacy**: liste e chiave restano solo nel `localStorage` del telefono. All'AI vengono inviati solo la nota, i nomi delle liste e le ultime voci di ciascuna (per capire a cosa serve ogni lista).
 
 ## Struttura
 

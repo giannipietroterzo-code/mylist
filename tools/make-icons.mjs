@@ -53,7 +53,8 @@ const roundRect = (px, py, x, y, w, h, r) => {
   const qy = Math.abs(py - (y + h / 2)) - (h / 2 - r);
   return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
 };
-const C1 = [0x7c, 0x5c, 0xff], C2 = [0xb4, 0x5c, 0xf5], C3 = [0xff, 0x5f, 0xa2];
+const C1 = [0xff, 0xdf, 0x5e], C2 = [0xfa, 0xc8, 0x1e], C3 = [0xf0, 0xae, 0x00];
+const INK = [0x26, 0x26, 0x26, 1]; // grigio grafite
 const grad = (t) => {
   t = Math.max(0, Math.min(1, t));
   const [a, b, u] = t < 0.5 ? [C1, C2, t * 2] : [C2, C3, (t - 0.5) * 2];
@@ -84,16 +85,16 @@ function render(size, scene, ss = 4) {
   return png(size, size, buf);
 }
 
-// Disegno del logo: spunta bianca centrata con un leggero alone; s = scala
+// Disegno del logo: spunta grafite centrata con un leggero alone; s = scala
 function logo(px, py, bgAlpha, s = 1) {
   const X = (px - 256) / s + 256, Y = (py - 256) / s + 256;
   const bg = grad((px + py) / 1024);
   // spunta (stroke 64, cap round): 150,262 → 222,334 → 362,186
   const d = Math.min(segDist(X, Y, 150, 262, 222, 334), segDist(X, Y, 222, 334, 362, 186)) - 32;
-  if (d <= 0) return [255, 255, 255, 1];
+  if (d <= 0) return INK;
   // ombra morbida sotto la spunta
   const sh = Math.min(segDist(X, Y - 14, 150, 262, 222, 334), segDist(X, Y - 14, 222, 334, 362, 186)) - 32;
-  const k = sh < 30 ? 0.18 * (1 - Math.max(0, sh) / 30) : 0;
+  const k = sh < 30 ? 0.10 * (1 - Math.max(0, sh) / 30) : 0;
   return [...bg.map((v) => v * (1 - k)), bgAlpha];
 }
 
@@ -114,7 +115,7 @@ function shortcut(draw) {
   return (px, py) => {
     const d = Math.hypot(px - 256, py - 256) - 256;
     if (d > 0) return [0, 0, 0, 0];
-    if (draw(px, py) <= 0) return [255, 255, 255, 1];
+    if (draw(px, py) <= 0) return INK;
     return [...grad((px + py) / 1024), 1];
   };
 }

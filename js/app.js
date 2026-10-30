@@ -14,10 +14,20 @@ const ui = { search: '', fresh: new Set(), voice: null, installEvt: null };
 
 // ---------- Utilità sulle liste ----------
 const listById = (id) => data.lists.find((l) => l.id === id);
-const listOf = (item) => listById(item.listId) || listById('inbox');
+// Lista di riserva: la prima rimasta (tutte le liste sono eliminabili, ne resta sempre almeno una)
+const fallbackList = () => data.lists[0];
+const listOf = (item) => listById(item.listId) || fallbackList();
 const openCount = (listId) => data.items.filter((i) => !i.done && (!listId || listOf(i).id === listId)).length;
 const currentList = () => (settings.view === 'all' ? null : listById(settings.view));
-const targetList = () => currentList() || listById(settings.target) || listById('inbox');
+const targetList = () => currentList() || listById(settings.target) || fallbackList();
+// Colore del testo leggibile sopra il colore della lista (scuro sui gialli, bianco sui grigi scuri)
+function ink(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const lin = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  const L = 0.2126 * lin(n >> 16) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+  return L > 0.33 ? '#1E1E1E' : '#FFFFFF';
+}
+const cv = (color) => `--c:${color};--on:${ink(color)}`;
 
 // ---------- Date ----------
 const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -34,17 +44,15 @@ function dueLabel(due) {
 
 function sortOpen(items) {
   return items.sort((a, b) =>
-    (b.starred - a.starred) ||
     ((a.due || '9999') < (b.due || '9999') ? -1 : (a.due || '9999') > (b.due || '9999') ? 1 : 0) ||
     (b.createdAt - a.createdAt));
 }
 
 // ---------- Inserimento rapido (senza AI) ----------
-// Sintassi: "#lista" sposta nella lista, "!" = importante, "oggi/domani/dopodomani" = scadenza
+// Sintassi: "#lista" sposta nella lista, "oggi/domani/dopodomani" = scadenza
 function parseQuick(raw, fallbackListId) {
   let text = ' ' + raw.trim() + ' ';
   let listId = fallbackListId;
-  let starred = false;
   let due = null;
 
   text = text.replace(/\s#([\p{L}\p{N}_-]+)/gu, (m, tag) => {
@@ -58,16 +66,12 @@ function parseQuick(raw, fallbackListId) {
     if (l) { listId = l.id; return ' '; }
     return m;
   });
-  if (/\s!+\s/.test(text) || /\s(urgente|importante)\s/i.test(text)) {
-    starred = true;
-    text = text.replace(/\s!+(?=\s)/g, ' ');
-  }
   const when = { oggi: 0, domani: 1, dopodomani: 2 };
   text = text.replace(/\s(?:per\s+)?(oggi|domani|dopodomani)(?=\s)/i, (m, w) => { due = addDays(when[w.toLowerCase()]); return ' '; });
 
   text = text.replace(/\s+/g, ' ').trim();
   if (text) text = text[0].toUpperCase() + text.slice(1);
-  return { text, listId, starred, due };
+  return { text, listId, due };
 }
 
 function addItems(entries) {
@@ -76,7 +80,7 @@ function addItems(entries) {
   const added = [];
   entries.forEach((e, i) => {
     if (!e.text) return;
-    const it = { id: uid(), text: e.text, listId: e.listId || 'inbox', done: false, starred: !!e.starred, due: e.due || null, createdAt: now - i };
+    const it = { id: uid(), text: e.text, listId: e.listId || fallbackList().id, done: false, due: e.due || null, createdAt: now - i };
     data.items.push(it);
     ui.fresh.add(it.id);
     added.push(it);
@@ -106,15 +110,19 @@ async function smartAdd(text, { viaVoice = false } = {}) {
     $('#btnGo').innerHTML = icon('sparkles');
   }
   try {
-    const res = await organize(text, data.lists, settings, targetList().name);
+    const lists = data.lists.map((l) => ({
+      name: l.name,
+      examples: data.items.filter((i) => i.listId === l.id).sort((a, b) => b.createdAt - a.createdAt).slice(0, 4).map((i) => i.text.slice(0, 60)),
+    }));
+    const res = await organize(text, lists, settings, { openList: currentList()?.name, fallback: targetList().name });
     if (!res.length) throw new Error('Nessuna voce trovata');
     const entries = res.map((r) => {
       let l = r.list ? findListByName(r.list) : null;
-      if (!l && r.list && norm(r.list) !== 'inbox') {
+      if (!l && r.list) {
         l = { id: uid(), name: r.list[0].toUpperCase() + r.list.slice(1), emoji: '📋', color: nextColor() };
         data.lists.push(l);
       }
-      return { text: r.text, listId: (l || targetList()).id, starred: r.important, due: r.due };
+      return { text: r.text, listId: (l || targetList()).id, due: r.due };
     });
     addItems(entries);
   } catch (err) {
@@ -154,7 +162,7 @@ function renderChips() {
   const all = `<button class="chip ${settings.view === 'all' ? 'on all' : ''}" data-view="all">Tutte <b>${openCount()}</b></button>`;
   const ls = data.lists.map((l) => {
     const n = openCount(l.id);
-    return `<button class="chip ${settings.view === l.id ? 'on' : ''}" data-view="${l.id}" style="--c:${l.color}">
+    return `<button class="chip ${settings.view === l.id ? 'on' : ''}" data-view="${l.id}" style="${cv(l.color)}">
       <span class="chip-emo">${l.emoji}</span>${esc(l.name)}${n ? ` <b>${n}</b>` : ''}</button>`;
   }).join('');
   chips.innerHTML = all + ls + `<button class="chip add" id="chipAdd" aria-label="Nuova lista">${icon('plus')}</button>`;
@@ -165,10 +173,10 @@ function itemHTML(it, showList) {
   const l = listOf(it);
   const due = dueLabel(it.due);
   const meta = [
-    showList ? `<span class="tag" style="--c:${l.color}">${l.emoji} ${esc(l.name)}</span>` : '',
+    showList ? `<span class="tag" style="${cv(l.color)}">${l.emoji} ${esc(l.name)}</span>` : '',
     due && !it.done ? `<span class="tag due ${due.cls}">${icon('calendar')}${due.text}</span>` : '',
   ].join('');
-  return `<li class="item ${it.done ? 'is-done' : ''} ${ui.fresh.has(it.id) ? 'pop' : ''}" data-id="${it.id}" style="--c:${l.color}">
+  return `<li class="item ${it.done ? 'is-done' : ''} ${ui.fresh.has(it.id) ? 'pop' : ''}" data-id="${it.id}" style="${cv(l.color)}">
     <div class="swipe-bg"><span class="sw-l">${icon('check')}</span><span class="sw-r">${icon('trash')}</span></div>
     <div class="item-body">
       <button class="check" aria-label="${it.done ? 'Segna da fare' : 'Completa'}">${icon('check')}</button>
@@ -176,7 +184,6 @@ function itemHTML(it, showList) {
         <div class="item-text">${esc(it.text)}</div>
         ${meta ? `<div class="meta">${meta}</div>` : ''}
       </div>
-      <button class="star ${it.starred ? 'on' : ''}" aria-label="Importante">${icon('star')}</button>
     </div>
   </li>`;
 }
@@ -206,7 +213,7 @@ function renderMain() {
     for (const l of data.lists) {
       const its = open.filter((i) => listOf(i).id === l.id);
       if (!its.length) continue;
-      html += `<section class="group" style="--c:${l.color}">
+      html += `<section class="group" style="${cv(l.color)}">
         <button class="group-h" data-view="${l.id}"><span class="g-emo">${l.emoji}</span>${esc(l.name)}<span class="g-n">${its.length}</span></button>
         <ul class="items">${its.map((i) => itemHTML(i, false)).join('')}</ul></section>`;
     }
@@ -232,8 +239,10 @@ function renderComposer() {
   const btn = $('#btnTarget');
   btn.innerHTML = `<span>${t.emoji}</span>`;
   btn.style.setProperty('--c', t.color);
-  btn.title = `Aggiungi in ${t.name}`;
-  $('#newText').placeholder = `Aggiungi in ${t.name}…`;
+  btn.style.setProperty('--on', ink(t.color));
+  const ai = aiReady(settings) && settings.aiMode === 'always';
+  btn.title = ai ? `Se non serve altro, finisce in ${t.name}` : `Aggiungi in ${t.name}`;
+  $('#newText').placeholder = ai ? 'Scrivi una nota, la smisto io…' : `Aggiungi in ${t.name}…`;
   updateGoButton();
 }
 
@@ -279,14 +288,6 @@ function deleteItem(id) {
   toast('Voce eliminata', 'Annulla', () => { restore(); render(); });
 }
 
-function toggleStar(id) {
-  const it = data.items.find((i) => i.id === id);
-  if (!it) return;
-  it.starred = !it.starred;
-  buzz(6);
-  saveData();
-  render();
-}
 
 // Animazione di chiusura riga prima del re-render
 function collapseThen(el, fn) {
@@ -373,7 +374,9 @@ function toast(text, action, fn) {
   b.hidden = !action;
   b.textContent = action || '';
   b.onclick = () => { hideToast(); fn?.(); };
-  t.hidden = false;
+  // popover = livello più alto: resta toccabile anche sopra i pannelli aperti
+  if (t.matches(':popover-open')) t.hidePopover();
+  t.showPopover?.();
   requestAnimationFrame(() => t.classList.add('show'));
   clearTimeout(toastTimer);
   toastTimer = setTimeout(hideToast, action ? 4500 : 3000);
@@ -381,7 +384,7 @@ function toast(text, action, fn) {
 function hideToast() {
   const t = $('#toast');
   t.classList.remove('show');
-  setTimeout(() => { if (!t.classList.contains('show')) t.hidden = true; }, 250);
+  setTimeout(() => { if (!t.classList.contains('show') && t.matches(':popover-open')) t.hidePopover(); }, 250);
 }
 
 // ---------- Bottom sheet ----------
@@ -430,18 +433,17 @@ function editItem(id) {
     <div class="sheet-head"><h2>Modifica voce</h2><button class="icon-btn" data-close aria-label="Chiudi">${icon('x')}</button></div>
     <textarea id="eText" rows="2" class="field big">${esc(it.text)}</textarea>
     <label class="lbl">Lista</label>
-    <div class="list-pick" id="eList">${data.lists.map((l) => `<button class="chip ${l.id === listOf(it).id ? 'on' : ''}" data-id="${l.id}" style="--c:${l.color}"><span class="chip-emo">${l.emoji}</span>${esc(l.name)}</button>`).join('')}</div>
+    <div class="list-pick" id="eList">${data.lists.map((l) => `<button class="chip ${l.id === listOf(it).id ? 'on' : ''}" data-id="${l.id}" style="${cv(l.color)}"><span class="chip-emo">${l.emoji}</span>${esc(l.name)}</button>`).join('')}</div>
     <label class="lbl">Scadenza</label>
     <div class="row wrap" id="eDue">
       ${dueOpts.map(([t, v]) => `<button class="chip soft ${it.due === v ? 'on' : ''}" data-due="${v}">${t}</button>`).join('')}
       <label class="chip soft date ${it.due && !dueOpts.some(([, v]) => v === it.due) ? 'on' : ''}">${icon('calendar')}<span>${it.due && !dueOpts.some(([, v]) => v === it.due) ? dueLabel(it.due).text : 'Data…'}</span><input type="date" id="eDate" value="${it.due || ''}"></label>
       ${it.due ? `<button class="chip soft" data-due="">${icon('x')}Nessuna</button>` : ''}
     </div>
-    <div class="row between top-gap">
-      <button class="pill-btn ghost ${it.starred ? 'starred' : ''}" id="eStar">${icon('star')}${it.starred ? 'Importante' : 'Segna importante'}</button>
-      <button class="pill-btn danger ghost" id="eDel">${icon('trash')}Elimina</button>
+    <div class="row top-gap">
+      <button class="pill-btn danger ghost grow" id="eDel">${icon('trash')}Elimina</button>
+      <button class="pill-btn grow" data-close>Fatto</button>
     </div>
-    <button class="pill-btn wide top-gap" data-close>Fatto</button>
   `, (root) => {
     const commit = () => { saveData(); render(); };
     const ta = $('#eText', root);
@@ -461,7 +463,6 @@ function editItem(id) {
       editItem(id);
     });
     $('#eDate', root).addEventListener('change', (e) => { it.due = e.target.value || null; commit(); editItem(id); });
-    $('#eStar', root).addEventListener('click', () => { it.starred = !it.starred; commit(); editItem(id); });
     $('#eDel', root).addEventListener('click', () => {
       closeSheet();
       data.items = data.items.filter((i) => i.id !== id);
@@ -484,12 +485,12 @@ function editList(id) {
     <label class="lbl">Icona</label>
     <div class="emoji-grid" id="lEmo">${LIST_EMOJIS.map((e) => `<button class="${e === draft.emoji ? 'on' : ''}" data-e="${e}">${e}</button>`).join('')}</div>
     <label class="lbl">Colore</label>
-    <div class="swatches" id="lCol">${LIST_COLORS.map((c) => `<button class="${c === draft.color ? 'on' : ''}" data-c="${c}" style="--c:${c}" aria-label="Colore ${c}"></button>`).join('')}</div>
+    <div class="swatches" id="lCol">${LIST_COLORS.map((c) => `<button class="${c === draft.color ? 'on' : ''}" data-c="${c}" style="${cv(c)}" aria-label="Colore ${c}"></button>`).join('')}</div>
     <button class="pill-btn wide top-gap" id="lSave">${l ? 'Salva' : 'Crea lista'}</button>
-    ${l && !l.fixed ? `<button class="pill-btn wide danger ghost" id="lDel">${icon('trash')}Elimina lista${count ? ` (${count} voci)` : ''}</button>` : ''}
+    ${l ? `<button class="pill-btn wide danger ghost" id="lDel">${icon('trash')}Elimina lista${count ? ` (${count} voci)` : ''}</button>` : ''}
   `, (root) => {
     const prev = () => {
-      $('#lPrev', root).innerHTML = `<span class="chip on" style="--c:${draft.color}"><span class="chip-emo">${draft.emoji}</span>${esc(draft.name || 'Nuova lista')}</span>`;
+      $('#lPrev', root).innerHTML = `<span class="chip on" style="${cv(draft.color)}"><span class="chip-emo">${draft.emoji}</span>${esc(draft.name || 'Nuova lista')}</span>`;
     };
     prev();
     const name = $('#lName', root);
@@ -528,30 +529,69 @@ function editList(id) {
   });
 }
 
-function confirmDeleteList(l, count) {
-  const doDelete = (withItems) => {
+// afterDelete: cosa mostrare dopo (es. tornare a "Gestisci liste"); di default chiude
+function confirmDeleteList(l, count, afterDelete) {
+  if (data.lists.length <= 1) {
+    toast('Serve almeno una lista: creane un\'altra prima di eliminare questa');
+    return;
+  }
+  const others = data.lists.filter((x) => x.id !== l.id);
+  const doDelete = (moveTo) => {
     const restore = snapshot();
-    if (withItems) data.items = data.items.filter((i) => i.listId !== l.id);
-    else data.items.forEach((i) => { if (i.listId === l.id) i.listId = 'inbox'; });
+    if (moveTo) data.items.forEach((i) => { if (i.listId === l.id) i.listId = moveTo; });
+    else data.items = data.items.filter((i) => i.listId !== l.id);
     data.lists = data.lists.filter((x) => x.id !== l.id);
-    settings.view = 'all';
-    if (settings.target === l.id) settings.target = 'inbox';
+    if (settings.view === l.id) settings.view = 'all';
+    if (settings.target === l.id) settings.target = data.lists[0].id;
     saveData();
     saveSettings();
-    closeSheet();
+    buzz(12);
+    if (afterDelete) afterDelete(); else closeSheet();
     render();
-    toast(`Lista "${l.name}" eliminata`, 'Annulla', () => { restore(); render(); });
+    toast(`Lista "${l.name}" eliminata`, 'Annulla', () => { restore(); render(); if (afterDelete) afterDelete(); });
   };
-  if (!count) return doDelete(true);
+  if (!count) return doDelete(null);
   openSheet(`
     <div class="sheet-head"><h2>Eliminare ${l.emoji} ${esc(l.name)}?</h2></div>
-    <p class="muted">La lista contiene ${count} ${count === 1 ? 'voce' : 'voci'}. Cosa ne facciamo?</p>
-    <button class="pill-btn wide top-gap" id="dMove">Sposta le voci in 📥 Inbox</button>
-    <button class="pill-btn wide danger" id="dAll">${icon('trash')}Elimina anche le voci</button>
-    <button class="pill-btn wide ghost" data-close>Annulla</button>
+    <p class="muted">Contiene ${count} ${count === 1 ? 'voce' : 'voci'}. Cosa ne facciamo?</p>
+    <button class="pill-btn wide danger" id="dAll">${icon('trash')}Elimina lista e voci</button>
+    <label class="lbl">Oppure sposta le voci in…</label>
+    <div class="list-pick" id="dMove">${others.map((o) => `<button class="chip" data-id="${o.id}" style="${cv(o.color)}"><span class="chip-emo">${o.emoji}</span>${esc(o.name)}</button>`).join('')}</div>
+    <button class="pill-btn wide ghost top-gap" id="dCancel">Annulla</button>
   `, (root) => {
-    $('#dMove', root).onclick = () => doDelete(false);
-    $('#dAll', root).onclick = () => doDelete(true);
+    $('#dAll', root).onclick = () => doDelete(null);
+    $('#dMove', root).onclick = (e) => { const b = e.target.closest('[data-id]'); if (b) doDelete(b.dataset.id); };
+    $('#dCancel', root).onclick = () => (afterDelete ? afterDelete() : closeSheet());
+  });
+}
+
+// ---------- Gestisci liste ----------
+function manageLists() {
+  const rows = data.lists.map((l) => {
+    const its = data.items.filter((i) => listOf(i).id === l.id);
+    const n = its.filter((i) => !i.done).length;
+    return `<div class="mrow" style="${cv(l.color)}">
+      <span class="m-emo">${l.emoji}</span>
+      <span class="m-name"><b>${esc(l.name)}</b><small>${n ? (n === 1 ? '1 da fare' : `${n} da fare`) : its.length ? 'Solo completate' : 'Vuota'}</small></span>
+      <button class="icon-btn" data-edit-list="${l.id}" aria-label="Modifica ${esc(l.name)}">${icon('pencil')}</button>
+      <button class="icon-btn danger" data-del-list="${l.id}" aria-label="Elimina ${esc(l.name)}">${icon('trash')}</button>
+    </div>`;
+  }).join('');
+  openSheet(`
+    <div class="sheet-head"><h2>Le tue liste</h2><button class="icon-btn" data-close aria-label="Chiudi">${icon('x')}</button></div>
+    <div class="mlist">${rows}</div>
+    <button class="pill-btn wide top-gap" id="mNew">${icon('plus')}Nuova lista</button>
+  `, (root) => {
+    root.querySelector('.mlist').addEventListener('click', (e) => {
+      const ed = e.target.closest('[data-edit-list]');
+      const del = e.target.closest('[data-del-list]');
+      if (ed) editList(ed.dataset.editList);
+      if (del) {
+        const l = listById(del.dataset.delList);
+        confirmDeleteList(l, data.items.filter((i) => listOf(i).id === l.id).length, manageLists);
+      }
+    });
+    $('#mNew', root).onclick = () => editList(null);
   });
 }
 
@@ -578,7 +618,8 @@ function openSettings() {
       <button class="model-btn" id="sModel"><span><b id="sModelName">${esc(settings.model)}</b><small>Tocca per scegliere dall'elenco OpenRouter</small></span>${icon('chevron')}</button>
 
       <label class="lbl">Quando usarlo</label>
-      ${seg('aiMode', settings.aiMode, [['voice', 'Solo dettatura'], ['always', 'Sempre'], ['off', 'Mai']])}
+      ${seg('aiMode', settings.aiMode, [['always', 'Sempre'], ['voice', 'Solo dettatura'], ['off', 'Mai']])}
+      <p class="muted small">L'AI capisce la nota e dove vuoi metterla ("mettilo nel lavoro", "per casa"…). Se non lo dici, sceglie lei la lista più adatta.</p>
 
       <button class="pill-btn wide ghost top-gap" id="sTest" ${hasKey ? '' : 'disabled'}>${icon('bolt')}Prova connessione</button>
       <p class="status small" id="sStatus"></p>
@@ -598,10 +639,15 @@ function openSettings() {
     </section>
 
     <section class="card">
+      <h3>${icon('tag')}Liste</h3>
+      <p class="muted small">Rinomina, cambia colore o elimina le tue liste.</p>
+      <button class="pill-btn wide ghost" id="sLists">${icon('pencil')}Gestisci liste</button>
+    </section>
+
+    <section class="card">
       <h3>${icon('bolt')}Scorciatoie</h3>
       <ul class="tips">
         <li><code>#spesa</code> manda la voce nella lista Spesa</li>
-        <li><code>!</code> o <i>urgente</i> la segna importante</li>
         <li><i>oggi</i>, <i>domani</i>, <i>dopodomani</i> impostano la scadenza</li>
         <li>Scorri a destra ✓ per completare, a sinistra 🗑 per eliminare</li>
         <li>Tieni premuta l'icona dell'app sul telefono → <b>Detta</b> per dettare al volo</li>
@@ -623,6 +669,7 @@ function openSettings() {
     key.addEventListener('input', () => {
       settings.apiKey = key.value.trim();
       saveSettings();
+      renderComposer();
       $('#sTest', root).disabled = !settings.apiKey;
     });
     $('#sKeyShow', root).onclick = () => { key.type = key.type === 'password' ? 'text' : 'password'; };
@@ -634,6 +681,7 @@ function openSettings() {
       s.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
       saveSettings();
       if (s.dataset.seg === 'theme') applyTheme();
+      render();
     }));
     $('#sLang', root).onchange = (e) => { settings.lang = e.target.value; saveSettings(); };
     $('#sTest', root).onclick = async () => {
@@ -649,6 +697,7 @@ function openSettings() {
         st.textContent = `✕ ${err.message}`;
       }
     };
+    $('#sLists', root).onclick = manageLists;
     $('#sExport', root).onclick = exportData;
     $('#sImport', root).onclick = () => $('#importFile').click();
     $('#sReset', root).onclick = () => {
@@ -749,7 +798,7 @@ function applyTheme() {
   if (t === 'auto') delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = t;
   const dark = t === 'dark' || (t === 'auto' && mq.matches);
-  $('#metaTheme').content = dark ? '#0E0D14' : '#F5F4FA';
+  $('#metaTheme').content = dark ? '#121212' : '#F3F3F1';
 }
 mq.addEventListener('change', applyTheme);
 
@@ -827,7 +876,7 @@ function toggleTargetPicker(force) {
   const show = force ?? p.hidden;
   if (!show) { p.classList.remove('show'); setTimeout(() => (p.hidden = true), 180); return; }
   const cur = targetList().id;
-  p.innerHTML = `<p class="picker-title">Aggiungi in…</p>` + data.lists.map((l) => `<button class="${l.id === cur ? 'on' : ''}" data-id="${l.id}" style="--c:${l.color}"><span>${l.emoji}</span>${esc(l.name)}${l.id === cur ? icon('check') : ''}</button>`).join('');
+  p.innerHTML = `<p class="picker-title">Aggiungi in…</p>` + data.lists.map((l) => `<button class="${l.id === cur ? 'on' : ''}" data-id="${l.id}" style="${cv(l.color)}"><span>${l.emoji}</span>${esc(l.name)}${l.id === cur ? icon('check') : ''}</button>`).join('');
   p.hidden = false;
   requestAnimationFrame(() => p.classList.add('show'));
 }
@@ -848,6 +897,8 @@ function bind() {
   $('#searchIco').innerHTML = icon('search');
   $('#btnSettings').innerHTML = icon('gear');
   $('#btnEditList').innerHTML = icon('pencil');
+  $('#btnLists').innerHTML = icon('tag');
+  $('#btnLists').onclick = manageLists;
 
   $('#btnSettings').onclick = openSettings;
   $('#btnEditList').onclick = () => editList(settings.view);
@@ -886,7 +937,6 @@ function bind() {
     if (ui.suppressClick) return;
     const li = e.target.closest('.item');
     if (e.target.closest('.check') && li) return toggleDone(li.dataset.id);
-    if (e.target.closest('.star') && li) return toggleStar(li.dataset.id);
     if (e.target.closest('[data-edit]') && li) return editItem(li.dataset.id);
     const gh = e.target.closest('.group-h');
     if (gh) return switchView(gh.dataset.view);

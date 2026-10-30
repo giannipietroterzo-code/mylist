@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <title>MyList</title>
   <meta name="description" content="La tua to-do list veloce, con dettatura e smistamento intelligente.">
-  <meta name="theme-color" content="#F5F4FA" id="metaTheme">
+  <meta name="theme-color" content="#F3F3F1" id="metaTheme">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -48,6 +48,7 @@
         </div>
         <div class="title-actions">
           <button class="icon-btn small" id="btnGroup" aria-label="Raggruppa per lista"></button>
+          <button class="icon-btn small" id="btnLists" aria-label="Gestisci liste"></button>
           <button class="icon-btn small" id="btnEditList" aria-label="Modifica lista" hidden></button>
         </div>
       </div>
@@ -89,7 +90,7 @@
     <div class="sheet-body" id="sheetBody"></div>
   </dialog>
 
-  <div class="toast" id="toast" role="status" aria-live="polite" hidden>
+  <div class="toast" id="toast" role="status" aria-live="polite" popover="manual">
     <span id="toastText"></span>
     <button id="toastAction" hidden></button>
   </div>

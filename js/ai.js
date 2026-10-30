@@ -47,29 +47,36 @@ function extractJSON(text) {
 const fmtDate = (d) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-export async function organize(text, lists, settings, currentList) {
+// lists: [{ name, examples: [testi di voci già presenti] }] — gli esempi aiutano a capire a cosa serve ogni lista
+export async function organize(text, lists, settings, { openList, fallback }) {
   const now = new Date();
   const day = now.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const names = lists.map((l) => `- ${l.name}`).join('\n');
+  const names = lists
+    .map((l) => `- ${l.name}${l.examples.length ? ` (contiene già: ${l.examples.map((e) => `"${e}"`).join(', ')})` : ''}`)
+    .join('\n');
 
-  const system = `Sei il motore di una app di to-do list. Ricevi una frase scritta o dettata a voce (può contenere errori di trascrizione) e la trasformi in voci da fare.
+  const system = `Sei l'assistente di una app di to-do list. L'utente ti scrive o ti detta a voce una nota (può contenere errori di trascrizione). Il tuo compito: capire cosa vuole fare e DOVE vuole metterla.
 
 Oggi è ${day} (${fmtDate(now)}).
 
-Liste esistenti:
+Liste dell'utente:
 ${names}
+${openList ? `\nL'utente in questo momento sta guardando la lista "${openList}".` : ''}
 
-Lista attualmente aperta: ${currentList}
+Come decidere la lista ("list"):
+A. Se l'utente indica dove metterla, anche in modo approssimativo o informale ("mettilo nel lavoro", "per casa", "nella spesa", "lista ufficio", "aggiungi a regali"), usa la lista esistente che corrisponde, anche se il nome non coincide esattamente.
+B. Se chiede esplicitamente una lista che non esiste ("crea la lista viaggi", "nella lista palestra"), usa quel nuovo nome: verrà creata.
+C. Se non lo specifica, scegli TU la lista esistente più adatta in base al significato della nota e a cosa contiene già ogni lista (es. alimenti e prodotti da comprare → spesa; clienti, riunioni, email → lavoro; riparazioni, bollette, pulizie → casa).
+D. Solo se nessuna lista è davvero adatta usa "${openList || fallback}".
+Le parole usate per indicare la lista ("mettilo in…", "nella lista…") NON vanno nel testo della voce.
 
-Regole:
-1. Se la frase contiene più cose distinte (es. un elenco della spesa, o "devo fare X e poi Y") crea una voce per ciascuna. Se è un'unica attività, una sola voce.
-2. Ogni voce: breve e chiara, iniziale maiuscola, senza punto finale, senza parole di servizio ("devo", "ricordami di", "aggiungi"). Mantieni nomi, numeri e dettagli utili. Correggi gli errori evidenti di dettatura.
-3. "list": il nome ESATTO di una lista esistente che meglio si adatta (es. alimenti → lista della spesa). Se l'utente nomina esplicitamente una lista, usa quella. Se non c'è una lista adatta usa la lista attualmente aperta, oppure "Inbox". Inventa un nome nuovo SOLO se l'utente chiede esplicitamente una lista che non esiste.
-4. "due": data in formato YYYY-MM-DD se viene indicato un giorno (oggi, domani, venerdì, il 12…), altrimenti null. Togli l'indicazione temporale dal testo.
-5. "important": true solo se l'utente dice che è urgente/importante.
+Come scrivere le voci:
+1. Se la nota contiene più cose distinte (un elenco della spesa, "devo fare X e poi Y") crea una voce per ciascuna; se è un'unica attività, una sola voce. Cose diverse possono andare in liste diverse.
+2. Testo breve e chiaro, iniziale maiuscola, senza punto finale, senza parole di servizio ("devo", "ricordami di", "aggiungi"). Mantieni nomi, numeri, quantità e dettagli utili. Correggi gli errori evidenti di dettatura.
+3. "due": data YYYY-MM-DD se viene indicato un giorno (oggi, domani, venerdì, il 12…), altrimenti null. Togli l'indicazione temporale dal testo.
 
 Rispondi SOLO con JSON valido, senza altro testo:
-{"items":[{"text":"...","list":"...","due":null,"important":false}]}`;
+{"items":[{"text":"...","list":"...","due":null}]}`;
 
   const { text: out } = await chat(settings, [
     { role: 'system', content: system },
@@ -83,7 +90,6 @@ Rispondi SOLO con JSON valido, senza altro testo:
       text: i.text.trim(),
       list: typeof i.list === 'string' ? i.list.trim() : '',
       due: /^\d{4}-\d{2}-\d{2}$/.test(i.due || '') ? i.due : null,
-      important: !!i.important,
     }));
 }
 
