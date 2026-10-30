@@ -46,6 +46,7 @@ export const DEFAULT_SETTINGS = {
   theme: 'auto', // auto | light | dark
   lang: 'it-IT',
   pause: 'normal', // short | normal | long: silenzio prima dell'invio automatico
+  autoListen: 'off', // off | open: "Hey Google, apri MyList" → MyList si apre già in ascolto
   grouped: true,
   showDone: false,
   view: 'all',

@@ -8,6 +8,7 @@ To-do list per smartphone Android: inserimento rapido, dettatura vocale, liste s
 - **Inserimento lampo**: barra fissa in basso. Scrivi e premi Invio; il campo resta pronto per la voce successiva.
 - **Dettatura con invio automatico**: con il campo vuoto il pulsante tondo è un microfono. Lo tocchi e parli: quando smetti, una barra si svuota e la nota parte da sola. Se ti fermi su una frase lasciata a metà ("compra il latte e…") aspetta di più. Pausa regolabile in Impostazioni (Breve / Normale / Lunga); "Invia ora" per non aspettare. Dopo l'invio si apre la lista dove è finita la nota, evidenziata.
 - **Scorciatoia dalla Home**: tieni premuta l'icona di MyList e scegli **Detta**: si apre già in ascolto.
+- **"Hey Google, apri MyList"**: in Impostazioni → Dettatura → *Quando apri MyList* scegli **Ascolta subito**. Poi basta dire "Hey Google, apri MyList" e subito dopo la nota: l'app si apre già in ascolto (anche quando la riapri dopo almeno 30 secondi).
 - **Condividi verso MyList**: da qualunque app (Chrome, WhatsApp…) usa *Condividi → MyList* per trasformare un testo in una voce.
 - **Liste** con emoji e colore (palette giallo/grigio). Le chip in alto filtrano; **Tutte** mostra tutto, raggruppato per lista oppure in un elenco unico.
 - **Gestisci liste** (icona etichette in alto o da Impostazioni): rinomina, cambia colore, elimina. Ogni lista è eliminabile (ne resta sempre almeno una); se contiene voci scegli se eliminarle o spostarle in un'altra lista.

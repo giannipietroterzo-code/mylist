@@ -917,6 +917,9 @@ function openSettings() {
       <label class="lbl">Pausa prima dell'invio automatico</label>
       ${seg('pause', settings.pause, [['short', 'Breve'], ['normal', 'Normale'], ['long', 'Lunga']])}
       <p class="muted small">Quando smetti di parlare la nota parte da sola. Se ti fermi a metà frase ("compra il latte e…") aspetto un po' di più.</p>
+      <label class="lbl">Quando apri MyList</label>
+      ${seg('autoListen', settings.autoListen, [['off', 'Mostra le liste'], ['open', 'Ascolta subito']])}
+      <p class="muted small">Con <b>Ascolta subito</b> basta dire <i>"Hey Google, apri MyList"</i> e poi la nota: MyList si apre già in ascolto (anche quando la riapri dopo almeno 30 secondi). Se non ti serve, tocca Annulla.</p>
       ${voiceSupported ? '' : `<p class="muted small">${icon('warn')} Questo browser non supporta la dettatura: usa Chrome su Android, oppure il microfono della tastiera.</p>`}
     </section>
 
@@ -1317,7 +1320,7 @@ function handleLaunchParams() {
   const p = new URLSearchParams(location.search);
   const shared = [p.get('title'), p.get('text'), p.get('url')].filter(Boolean).join(' ').trim();
   if (p.get('done')) setTimeout(() => remoteDone(...p.get('done').split('|')), 300);
-  if (p.has('voice')) setTimeout(startVoice, 300);
+  if (p.has('voice') || (settings.autoListen === 'open' && !p.get('done') && !p.has('new') && !shared)) setTimeout(startVoice, 400);
   else if (p.has('new')) setTimeout(() => $('#newText').focus(), 300);
   else if (shared) {
     $('#newText').value = shared;
@@ -1332,6 +1335,13 @@ applyTheme();
 bind();
 render();
 handleLaunchParams();
+// "Apri già in ascolto": vale anche quando riapri MyList dopo un po' (dall'Assistente o dalle app recenti)
+let hiddenAt = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { hiddenAt = Date.now(); return; }
+  const idle = hiddenAt && Date.now() - hiddenAt > 30000;
+  if (settings.autoListen === 'open' && idle && $('#voice').hidden && !sheet.open && !$('#newText').value.trim()) setTimeout(startVoice, 400);
+});
 // Le etichette "Oggi 16:00" diventano "in ritardo" col passare del tempo: aggiorna ogni minuto (mai durante uno swipe)
 setInterval(() => {
   if (!document.hidden && !document.querySelector('.item.swiping, .item.collapse') && !$('#newText').matches(':focus')) renderMain();
