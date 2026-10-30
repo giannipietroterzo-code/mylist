@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <title>MyList</title>
   <meta name="description" content="La tua to-do list veloce, con dettatura e smistamento intelligente.">
-  <meta name="theme-color" content="#F5B800" id="metaTheme">
+  <meta name="theme-color" content="#E3E3DF" id="metaTheme">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -27,12 +27,16 @@
   <div class="app">
     <header class="top">
       <div class="top-row">
-        <div class="brand">
-          <span class="brand-mark" aria-hidden="true"><i class="fi-rr-check"></i></span>
-          <span class="brand-name">MyList</span>
+        <span class="brand-mark" aria-hidden="true"><i class="fi-rr-check"></i></span>
+        <div class="title">
+          <h1 id="viewTitle">Tutte</h1>
+          <p id="viewSub" class="sub"></p>
         </div>
         <div class="top-actions">
+          <button class="icon-btn" id="btnGroup" aria-label="Raggruppa per lista"></button>
+          <button class="icon-btn" id="btnEditList" aria-label="Modifica lista" hidden></button>
           <button class="icon-btn" id="btnSearch" aria-label="Cerca"></button>
+          <button class="icon-btn" id="btnLists" aria-label="Gestisci liste"></button>
           <button class="icon-btn" id="btnSettings" aria-label="Impostazioni"></button>
         </div>
       </div>
@@ -40,18 +44,6 @@
       <div class="search" id="searchBox" hidden>
         <span class="search-ico" id="searchIco"></span>
         <input id="searchInput" type="search" placeholder="Cerca in tutte le liste…" autocomplete="off" enterkeyhint="search">
-      </div>
-
-      <div class="title-row">
-        <div>
-          <h1 id="viewTitle">Tutte</h1>
-          <p id="viewSub" class="sub"></p>
-        </div>
-        <div class="title-actions">
-          <button class="icon-btn small" id="btnGroup" aria-label="Raggruppa per lista"></button>
-          <button class="icon-btn small" id="btnLists" aria-label="Gestisci liste"></button>
-          <button class="icon-btn small" id="btnEditList" aria-label="Modifica lista" hidden></button>
-        </div>
       </div>
     </header>
 

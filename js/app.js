@@ -150,8 +150,8 @@ function renderHeader() {
   const searching = !!ui.search.trim();
   $('#viewTitle').innerHTML = searching ? 'Risultati' : l ? `<span class="t-ico" style="${cv(l.color)}">${listIcon(l)}</span>${esc(l.name)}` : 'Tutte';
   const n = openCount(l?.id);
-  const today = new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
-  $('#viewSub').textContent = `${n ? (n === 1 ? '1 cosa da fare' : `${n} cose da fare`) : 'Tutto fatto'} · ${today}`;
+  const today = new Date().toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '');
+  $('#viewSub').textContent = `${n ? `${n} da fare` : 'Tutto fatto'} · ${today}`;
   $('#btnEditList').hidden = !l;
   $('#btnGroup').hidden = !!l || searching;
   $('#btnGroup').innerHTML = icon(settings.grouped ? 'group' : 'flat');
@@ -804,7 +804,7 @@ function applyTheme() {
   if (t === 'auto') delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = t;
   const dark = t === 'dark' || (t === 'auto' && mq.matches);
-  $('#metaTheme').content = dark ? '#121212' : '#F5B800';
+  $('#metaTheme').content = dark ? '#121212' : '#E3E3DF';
 }
 mq.addEventListener('change', applyTheme);
 
