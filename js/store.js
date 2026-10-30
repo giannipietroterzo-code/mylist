@@ -45,7 +45,7 @@ export const DEFAULT_SETTINGS = {
   apiKey: '',
   model: 'openrouter/auto',
   aiMode: 'always', // always | voice | off
-  theme: 'auto', // auto | light | medium | dark
+  theme: 'auto', // auto | light | medium | medium2 | medium3 | dark
   lang: 'it-IT',
   pause: 'normal', // short | normal | long: silenzio prima dell'invio automatico
   grouped: true,

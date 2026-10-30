@@ -1257,7 +1257,9 @@ function openSettings() {
 
     <section class="card">
       <h3>${icon('eye')}Aspetto</h3>
-      ${seg('theme', settings.theme, [['auto', 'Auto'], ['light', 'Chiaro'], ['medium', 'Medio'], ['dark', 'Scuro']])}
+      <div class="theme-grid" data-seg="theme">
+        ${THEMES.map(([v, name, bg, sf]) => `<button class="${settings.theme === v ? 'on' : ''}" data-v="${v}"><span class="theme-prev ${v === 'auto' ? 'auto' : ''}" style="${bg ? `--pb:${bg};--ps:${sf}` : ''}"></span>${name}</button>`).join('')}
+      </div>
     </section>
 
     <section class="card">
@@ -1427,12 +1429,18 @@ $('#importFile').addEventListener('change', async (e) => {
 
 // ---------- Tema ----------
 const mq = matchMedia('(prefers-color-scheme: dark)');
+// Temi: [valore, nome, sfondo, scheda] — i tre Medi stanno a distanza uguale tra Chiaro e Scuro
+const THEMES = [
+  ['auto', 'Auto'], ['light', 'Chiaro', '#E3E3DF', '#F7F7F5'], ['medium', 'Medio 1', '#2A2A28', '#373735'],
+  ['medium2', 'Medio 2', '#222221', '#2F2F2D'], ['medium3', 'Medio 3', '#1A1A19', '#262626'], ['dark', 'Scuro', '#121212', '#1E1E1E'],
+];
+const THEME_BAR = { medium: '#373735', medium2: '#2F2F2D', medium3: '#262626' };
 function applyTheme() {
   const t = settings.theme;
   if (t === 'auto') delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = t;
   const dark = t === 'dark' || (t === 'auto' && mq.matches);
-  $('#metaTheme').content = t === 'medium' ? '#373735' : dark ? '#1E1E1E' : '#F7F7F5'; // come la fascia dell'intestazione
+  $('#metaTheme').content = THEME_BAR[t] || (dark ? '#1E1E1E' : '#F7F7F5'); // come la fascia dell'intestazione
 }
 mq.addEventListener('change', applyTheme);
 

@@ -25,7 +25,7 @@ To-do list per smartphone Android: inserimento rapido, dettatura vocale, liste s
   - *ogni giorno*, *il lunedì*, *dal lunedì al venerdì*, *ogni mese* → ricorrenza
   - *"nella lista lavoro …"* → funziona anche a voce
 - **Smistamento AI** (opzionale): scrivi o detta una nota libera. L'AI capisce cosa vuoi fare e **dove metterla**: se lo dici ("mettilo nel lavoro", "per casa") usa quella lista, altrimenti sceglie lei la più adatta guardando anche cosa contiene già ogni lista. Più cose nella stessa nota diventano più voci, anche in liste diverse.
-- Grafica piatta a tinta unita: tema chiaro (testata gialla su grigio), medio (grafite) e scuro (grafite e giallo), vibrazioni, animazioni, backup/ripristino in JSON.
+- Grafica piatta a tinta unita: tema chiaro (testata gialla su grigio), tre medi (Medio 1-2-3, grafite sempre più scura) e scuro (grafite e giallo), vibrazioni, animazioni, backup/ripristino in JSON.
 - Icone: [UIcons by Flaticon](https://www.flaticon.com/uicons) (regular rounded), incluse nell'app per funzionare offline.
 
 ## Metterla sul telefono
