@@ -12,11 +12,10 @@
   --accent-ink: #9A6F00;
   --on-accent: #1E1E1E;
   --grad: linear-gradient(135deg, #FFD84D 0%, #F5B800 100%);
-  --glow: rgba(245, 184, 0, .40);
   --danger: #E5484D;
   --ok: #3F3F46;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, .05), 0 2px 8px rgba(0, 0, 0, .04);
-  --shadow: 0 2px 6px rgba(0, 0, 0, .05), 0 12px 32px rgba(0, 0, 0, .10);
+  --shadow: 0 1px 3px rgba(0, 0, 0, .10);
   --glass: rgba(247, 247, 245, .85);
   --head-bg: linear-gradient(160deg, #FFDA55 0%, #F5B800 100%);
   --head-ink: #1E1E1E;
@@ -49,7 +48,7 @@
     --ok: #A1A1AA;
     --line: rgba(255, 255, 255, .07);
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);
-    --shadow: 0 2px 6px rgba(0, 0, 0, .3), 0 12px 32px rgba(0, 0, 0, .45);
+    --shadow: 0 1px 3px rgba(0, 0, 0, .45);
     --glass: rgba(34, 34, 34, .82);
     color-scheme: dark;
   }
@@ -72,7 +71,7 @@
   --ok: #A1A1AA;
   --line: rgba(255, 255, 255, .07);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);
-  --shadow: 0 2px 6px rgba(0, 0, 0, .3), 0 12px 32px rgba(0, 0, 0, .45);
+  --shadow: 0 1px 3px rgba(0, 0, 0, .45);
   --glass: rgba(34, 34, 34, .82);
   color-scheme: dark;
 }
@@ -115,7 +114,7 @@ input, textarea, select { font: inherit; color: inherit; }
 .brand { display: flex; align-items: center; gap: 8px; }
 .brand-mark {
   width: 26px; height: 26px; border-radius: 8px; background: var(--mark-bg);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, .18);
+  box-shadow: none;
   position: relative;
   display: grid; place-items: center; color: var(--mark-ink); font-size: 15px;
 }
@@ -168,9 +167,9 @@ h1 { margin: 0; font-size: 32px; line-height: 1.1; font-weight: 800; letter-spac
 .chip b { font-weight: 700; font-size: 12px; color: var(--text-2); background: var(--surface-2); padding: 1px 7px; border-radius: 99px; min-width: 20px; text-align: center; }
 .chip-emo { font-size: 16px; color: color-mix(in srgb, var(--c) 70%, var(--text)); }
 .chip.on .chip-emo { color: inherit; }
-.chip.on { background: var(--c); color: var(--on, #fff); box-shadow: 0 6px 16px color-mix(in srgb, var(--c) 40%, transparent); }
+.chip.on { background: var(--c); color: var(--on, #fff); box-shadow: none; }
 .chip.on b { background: color-mix(in srgb, var(--on, #fff) 18%, transparent); color: var(--on, #fff); }
-.chip.on.all { background: var(--grad); color: var(--on-accent); box-shadow: 0 6px 16px var(--glow); }
+.chip.on.all { background: var(--accent); color: var(--on-accent); box-shadow: none; }
 .chip.on.all b { background: rgba(0, 0, 0, .1); color: var(--on-accent); }
 .chip.add { width: 38px; padding: 0; justify-content: center; color: var(--text-2); background: transparent; box-shadow: inset 0 0 0 1.5px var(--line); }
 .chip.add .ico { font-size: 18px; }
@@ -192,7 +191,6 @@ h1 { margin: 0; font-size: 32px; line-height: 1.1; font-weight: 800; letter-spac
 
 .item { position: relative; border-radius: var(--radius); }
 .item.pop { animation: pop .45s cubic-bezier(.2, .9, .3, 1.3); }
-.item.pop .item-body { animation: glow 1.4s ease; }
 .item.collapse { transition: height .25s ease, opacity .2s ease, margin .25s ease; opacity: 0; overflow: hidden; margin-bottom: -8px; }
 
 .swipe-bg {
@@ -299,7 +297,7 @@ h1 { margin: 0; font-size: 32px; line-height: 1.1; font-weight: 800; letter-spac
   width: 52px; height: 52px; flex: none; border-radius: 50%;
   display: grid; place-items: center; color: var(--on-accent);
   background: var(--grad);
-  box-shadow: 0 8px 20px var(--glow);
+  box-shadow: none;
   transition: transform .15s;
 }
 .go .ico { font-size: 24px; animation: spinIn .25s ease; }
@@ -349,9 +347,7 @@ h1 { margin: 0; font-size: 32px; line-height: 1.1; font-weight: 800; letter-spac
   display: flex; flex-direction: column; align-items: center; justify-content: space-between;
   padding: max(40px, env(safe-area-inset-top)) 24px calc(30px + var(--safe-b));
   background:
-    radial-gradient(120% 70% at 50% 40%, rgba(245, 184, 0, .28), transparent 70%),
-    radial-gradient(90% 60% at 80% 100%, rgba(255, 216, 77, .12), transparent 70%),
-    rgba(18, 18, 18, .94);
+    rgba(18, 18, 18, .96);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   color: #fff; opacity: 0; transition: opacity .22s ease;
 }
@@ -361,13 +357,13 @@ h1 { margin: 0; font-size: 32px; line-height: 1.1; font-weight: 800; letter-spac
 .voice-orb {
   position: relative; width: 132px; height: 132px; border-radius: 50%;
   background: var(--grad); color: #1E1E1E; display: grid; place-items: center;
-  box-shadow: 0 20px 60px rgba(245, 184, 0, .45);
+  box-shadow: none;
   transform: scale(.6); transition: transform .35s cubic-bezier(.2, .9, .3, 1.4);
 }
 .voice.show .voice-orb { transform: scale(1); }
 .orb-ico { position: relative; z-index: 2; display: grid; }
 .orb-ico .ico { font-size: 48px; }
-.ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(255, 216, 77, .5); animation: ring 2.4s ease-out infinite; }
+.ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(255, 216, 77, .35); animation: ring 2.4s ease-out infinite; }
 .ring.r2 { animation-delay: .8s; }
 .ring.r3 { animation-delay: 1.6s; }
 .voice.thinking .ring { animation: none; opacity: 0; }
@@ -481,7 +477,7 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 .install-card {
   display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
   background: var(--grad); color: var(--on-accent); border-radius: 20px; padding: 16px; margin-bottom: 12px;
-  box-shadow: 0 10px 24px var(--glow);
+  box-shadow: none;
 }
 .install-card .ico { font-size: 30px; }
 .install-card small { display: block; opacity: .85; font-size: 13px; }
@@ -511,7 +507,6 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 
 /* ---------- Animazioni ---------- */
 @keyframes pop { 0% { transform: scale(.9) translateY(-6px); opacity: 0; } 100% { transform: none; opacity: 1; } }
-@keyframes glow { 0% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 60%, transparent); } 100% { box-shadow: var(--shadow-sm); } }
 @keyframes burst { 0% { transform: scale(1); } 40% { transform: scale(1.3); } 100% { transform: scale(1); } }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes drop { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
