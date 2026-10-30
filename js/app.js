@@ -9,6 +9,7 @@ const PAUSE_MS = { short: 900, normal: 1500, long: 2500 };
 const VERSION = window.MYLIST_VERSION || '';
 import { aiReady, organize, testConnection, listModels } from './ai.js';
 import { dayKey, addDays, hhmm, parseWhen, remindAt, fromNow, dayFor, firstDue, advance, repeatLabel, sameRepeat } from './when.js';
+import { chime, primeSound } from './sound.js';
 import { initReminders, settle, notifySupported, notifyPermission, askNotify, newTopic, ntfyLink, sendTest } from './reminders.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -829,10 +830,19 @@ function ntfyBox() {
   return `<ol class="steps">
       <li><span>Installa <b>ntfy</b> dal Play Store</span><a class="pill-btn ghost small-btn" href="https://play.google.com/store/apps/details?id=io.heckel.ntfy" target="_blank" rel="noopener">Play Store</a></li>
       <li><span>Collega MyList: si apre ntfy e si iscrive al tuo canale</span><a class="pill-btn small-btn" href="${ntfyLink(t)}">${icon('bell')}Collega</a></li>
-      <li><span>Controlla che arrivi</span><button class="pill-btn ghost small-btn" id="sNtfyTest">${icon('send')}Prova</button></li>
+      <li><span>Controlla che arrivi e che suoni</span><button class="pill-btn ghost small-btn" id="sNtfyTest">${icon('send')}Prova</button></li>
     </ol>
     <p class="status small" id="sNtfyStatus"></p>
     <p class="muted small">Canale privato: <code>${esc(t)}</code><br>Il testo dei promemoria passa dal server ntfy.sh, che lo consegna al telefono (si programma fino a 3 giorni prima; gli avvisi più lontani partono alle aperture successive di MyList). In ntfy attiva la <i>consegna istantanea</i> per non avere ritardi.</p>
+    <div class="howto">
+      <b>${icon('bell')} Per farlo suonare finché non rispondi</b>
+      <ol>
+        <li>In ntfy tocca il canale <b>MyList</b> → menu ⋮ → <b>Impostazioni</b> dell'iscrizione</li>
+        <li>Attiva <b>Avvisi insistenti</b> (<i>Insistent max priority</i>): suona e vibra di continuo finché non tocchi la notifica</li>
+        <li>Per cambiare la suoneria: impostazioni Android → App → ntfy → Notifiche → <b>Priorità massima</b> → Suono (lì puoi anche fargli ignorare il <i>Non disturbare</i>)</li>
+      </ol>
+      <p>I nomi delle voci possono cambiare un po' tra versioni di ntfy e di Android.</p>
+    </div>
     <p class="muted small">${icon('bell')} Sulla notifica trovi <b>Fatto</b> e <b>+10 min</b>: funzionano senza aprire MyList. I "Fatto" vengono spuntati qui quando riapri l'app (entro 12 ore).</p>`;
 }
 function bindReminderSettings(root) {
@@ -913,6 +923,11 @@ function openSettings() {
     <section class="card">
       <h3>${icon('bell')}Promemoria</h3>
       <p class="muted small">Di' o scrivi <i>"alle 16 prendere la pasticca, avvisami mezz'ora prima"</i> oppure <i>"ricordami tra 20 minuti di aprire il cancello"</i>.</p>
+      <label class="lbl">Come suonano</label>
+      ${seg('alertLevel', settings.alertLevel, [['loud', 'Forte'], ['normal', 'Normale']])}
+      <p class="muted small"><b>Forte</b>: suona tre volte, vibra a lungo e compare sopra le altre app. <b>Normale</b>: un solo din-don e una vibrazione breve.</p>
+      <button class="pill-btn wide ghost" id="sChime">${icon('bell')}Senti il suono</button>
+
       <label class="lbl">Notifiche di questo telefono</label>
       <div class="row wrap" id="sNotifyRow">${notifyRow()}</div>
       <p class="muted small">Arrivano se MyList è aperta o in background da poco: un'app web non può svegliarsi da sola a telefono in tasca.</p>
@@ -972,6 +987,7 @@ function openSettings() {
       s.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
       saveSettings();
       if (s.dataset.seg === 'theme') applyTheme();
+      if (s.dataset.seg === 'alertLevel') window.dispatchEvent(new Event('mylist:saved')); // riprogramma ntfy col nuovo livello
       render();
     }));
     $('#sLang', root).onchange = (e) => { settings.lang = e.target.value; saveSettings(); };
@@ -990,6 +1006,7 @@ function openSettings() {
     };
     $('#sLists', root).onclick = manageLists;
     bindReminderSettings(root);
+    $('#sChime', root).onclick = () => chime(settings.alertLevel !== 'normal' ? 3 : 1);
     $('#sExport', root).onclick = exportData;
     $('#sImport', root).onclick = () => $('#importFile').click();
     $('#sReset', root).onclick = () => {
@@ -1321,9 +1338,12 @@ setInterval(() => {
 }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
 // Avviso arrivato con l'app aperta: vibra e mostralo, con "Fatto" a portata di dito
+primeSound();
 initReminders({
   fire: (it, late) => {
-    navigator.vibrate?.([200, 100, 200]);
+    const loud = settings.alertLevel !== 'normal';
+    navigator.vibrate?.(loud ? [400, 150, 400, 150, 800] : [200, 100, 200]);
+    if (!late && !document.hidden) chime(loud ? 3 : 1);
     render();
     toast(`${late ? 'Era alle' : 'Promemoria ·'} ${late ? fmtTime(remindAt(it)) + ': ' : ''}${it.text}`, 'Fatto', () => toggleDoneImmediate(it.id));
   },

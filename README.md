@@ -60,6 +60,8 @@ Sulla notifica di ntfy ci sono due tasti che funzionano **senza aprire MyList**:
 - **Fatto**: lascia un messaggio nel canale privato `<canale>-fatto`; MyList lo legge quando la riapri (entro 12 ore, quanto ntfy.sh conserva i messaggi) e spunta la voce, o la passa alla volta successiva se è ricorrente.
 - **+10 min**: il telefono riprogramma l'avviso su ntfy da solo (fino a 3 rinvii).
 
+**Suono**: in Impostazioni → Promemoria scegli *Forte* (default: priorità massima di ntfy, suono e vibrazione lunga sopra le altre app; con l'app aperta un din-don ripetuto tre volte) o *Normale*. Per farlo suonare **finché non rispondi**: in ntfy, impostazioni del canale MyList → *Avvisi insistenti* (Insistent max priority). La suoneria si cambia da Android → App → ntfy → Notifiche → Priorità massima.
+
 Le ricorrenti vengono programmate su ntfy per tutte le volte dei prossimi 3 giorni, così la pasticca suona anche se non apri MyList per un paio di giorni.
 
 ## Struttura
@@ -74,6 +76,7 @@ js/voice.js             dettatura (Web Speech API)
 js/ai.js                OpenRouter: smistamento, test, elenco modelli
 js/when.js              date, orari e promemoria senza AI ("alle 16", "tra 20 minuti", "mezz'ora prima")
 js/reminders.js         avvisi: notifiche locali + programmazione su ntfy
+js/sound.js             din-don dei promemoria con l'app aperta (sintetizzato, nessun file)
 sw.js                   service worker (offline)
 manifest.webmanifest    installazione, scorciatoie, condivisione
 icons/                  logo (onda vocale + spunta) e icone dell'app, disegnati a mano (rigenerabili con: node tools/make-icons.mjs)

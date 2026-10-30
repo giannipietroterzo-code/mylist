@@ -553,3 +553,8 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 .steps .pill-btn.ghost { background: var(--surface); }
 .tag.rep { --c: var(--text-2); background: var(--surface-2); color: var(--text-2); }
 .tag.rep .ico { font-size: 12px; }
+.howto { margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 14%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); font-size: 13px; color: var(--text); }
+.howto > b { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+.howto .ico { font-size: 14px; }
+.howto ol { margin: 8px 0 6px; padding-left: 18px; display: grid; gap: 6px; }
+.howto p { margin: 0; color: var(--text-2); font-size: 12px; }

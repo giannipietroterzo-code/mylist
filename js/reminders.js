@@ -11,7 +11,7 @@ import { data, settings, saveData } from './store.js';
 import { remindAt, occurrences } from './when.js';
 
 const NTFY = 'https://ntfy.sh';
-const PUSH_KEY = 'mylist.push.v1'; // { sequenza: "momento|canale|testo" } avvisi già programmati su ntfy
+const PUSH_KEY = 'mylist.push.v1'; // { sequenza: "momento|canale|priorità|testo" } avvisi già programmati su ntfy
 const SINCE_KEY = 'mylist.doneSince.v1'; // ultimo "Fatto" letto dal canale ntfy
 const HORIZON = 3 * 864e5 - 5 * 60000;
 const SNOOZES = 3;
@@ -42,6 +42,8 @@ const writePush = (m) => localStorage.setItem(PUSH_KEY, JSON.stringify(m));
 const seqOf = (it, due = it.due) => (it.repeat ? `${it.id}-${due.replace(/-/g, '')}` : it.id);
 // L'avviso di questa volta è già affidato a ntfy?
 const pushed = (it, at) => !!settings.ntfyTopic && !!readPush()[seqOf(it)]?.startsWith(`${at}|${settings.ntfyTopic}|`);
+// Forte = priorità massima di ntfy: suono, vibrazione lunga, sopra le altre app (e "insistente" se lo attivi in ntfy)
+export const priority = () => (settings.alertLevel === 'normal' ? 4 : 5);
 const body = (it) => `${it.text}${it.time ? ` · alle ${it.time}` : ''}`;
 
 async function ntfy(path, init) {
@@ -55,7 +57,7 @@ const publish = (msg) => ntfy('', { method: 'POST', body: JSON.stringify(msg) })
 function message(topic, it, due, seq, delay, snoozes = SNOOZES, snoozed = false) {
   const m = {
     topic, sequence_id: seq, delay, title: snoozed ? 'MyList · rimandato' : 'MyList',
-    message: body(it), tags: [snoozed ? 'alarm_clock' : 'bell'], priority: 4, click: APP_URL,
+    message: body(it), tags: [snoozed ? 'alarm_clock' : 'bell'], priority: priority(), click: APP_URL,
     actions: [{ action: 'http', label: 'Fatto', url: `${NTFY}/`, method: 'POST', clear: true, body: JSON.stringify({ topic: doneTopic(topic), message: `${it.id}|${due}` }) }],
   };
   if (snoozes > 0) {
@@ -66,7 +68,7 @@ function message(topic, it, due, seq, delay, snoozes = SNOOZES, snoozed = false)
 }
 
 export function sendTest(topic) {
-  return publish({ topic, title: 'MyList', tags: ['white_check_mark'], click: APP_URL, message: 'Collegamento riuscito: qui arriveranno i promemoria' });
+  return publish({ topic, title: 'MyList', tags: ['bell'], priority: priority(), click: APP_URL, message: 'Prova: i promemoria arriveranno così (suono e vibrazione)' });
 }
 
 // Mostra l'avviso: notifica di sistema (se non ci pensa già ntfy) + avviso dentro l'app
@@ -78,7 +80,8 @@ async function fire(it, at) {
     const reg = await navigator.serviceWorker.ready.catch(() => null);
     reg?.showNotification(late ? 'MyList · promemoria passato' : 'MyList', {
       body: body(it), tag: it.id, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png',
-      vibrate: [200, 100, 200], renotify: true, data: { url: APP_URL, done: `${it.id}|${it.due}` },
+      // resta sullo schermo finché non la tocchi
+      vibrate: priority() === 5 ? [400, 150, 400, 150, 400, 150, 800] : [200, 100, 200], renotify: true, requireInteraction: true, silent: false, data: { url: APP_URL, done: `${it.id}|${it.due}` },
       actions: [{ action: 'done', title: 'Fatto' }],
     });
   }
@@ -117,7 +120,7 @@ async function syncNtfy() {
       if (it.done) continue;
       // le ricorrenti si programmano tutte le volte dei prossimi 3 giorni: arrivano anche senza riaprire MyList
       for (const { due, at } of occurrences(it, now + HORIZON)) {
-        if (at > now + 15000 && it.fired !== at) want.set(seqOf(it, due), { it, due, at, key: `${at}|${topic}|${it.text}` });
+        if (at > now + 15000 && it.fired !== at) want.set(seqOf(it, due), { it, due, at, key: `${at}|${topic}|${priority()}|${it.text}` });
       }
     }
   }

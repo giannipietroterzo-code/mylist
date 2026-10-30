@@ -16,6 +16,7 @@ const ASSETS = [
   './js/icons.js',
   './js/when.js',
   './js/reminders.js',
+  './js/sound.js',
   './manifest.webmanifest',
   './icons/icon.svg',
   './icons/icon-192.png',

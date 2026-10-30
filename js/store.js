@@ -51,6 +51,7 @@ export const DEFAULT_SETTINGS = {
   view: 'all',
   target: 'inbox',
   ntfyTopic: '', // canale ntfy per gli avvisi ad app chiusa ('' = spento)
+  alertLevel: 'loud', // loud | normal: quanto si fanno sentire i promemoria
 };
 
 function read(key, fallback) {
