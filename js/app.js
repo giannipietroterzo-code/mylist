@@ -1,7 +1,7 @@
 import { icon, listIcon } from './icons.js';
 import {
   data, settings, saveData, saveSettings, snapshot, replaceData, resetAll,
-  uid, norm, findListByName, nextColor, LIST_COLORS, LIST_ICONS, trashNote, restoreNote, TRASH_DAYS,
+  uid, norm, findListByName, nextColor, suggestStyle, LIST_COLORS, LIST_ICONS, trashNote, restoreNote, TRASH_DAYS,
 } from './store.js';
 import { voiceSupported, listen } from './voice.js';
 
@@ -26,6 +26,8 @@ const listOf = (item) => listById(item.listId) || fallbackList();
 const openCount = (listId) => data.items.filter((i) => !i.done && (!listId || listOf(i).id === listId)).length;
 const currentList = () => (settings.view === 'all' ? null : listById(settings.view));
 const inNotes = () => settings.view === 'notes';
+// Nelle Note, scheda Idee: quello che scrivi o detti diventa un'idea
+const ideaMode = () => inNotes() && ui.noteFilter === 'ideas';
 const targetList = () => currentList() || listById(settings.target) || fallbackList();
 // Colore del testo leggibile sopra il colore della lista (scuro sui gialli, bianco sui grigi scuri)
 function ink(hex) {
@@ -184,7 +186,8 @@ function addItems(entries, { reveal = false, done = [], notes = [] } = {}) {
     added.push(it);
   });
   const finishing = done.map((id) => data.items.find((i) => i.id === id && !i.done)).filter(Boolean);
-  const noted = notes.filter((n) => n.text).map((n, i) => ({ id: uid(), title: n.title || '', titleFor: n.title ? n.text : null, text: n.text, idea: !!n.idea, createdAt: now - i, updatedAt: now - i }));
+  const forceIdea = ideaMode();
+  const noted = notes.filter((n) => n.text).map((n, i) => ({ id: uid(), title: n.title || '', titleFor: n.title ? n.text : null, text: n.text, idea: !!n.idea || forceIdea, createdAt: now - i, updatedAt: now - i }));
   if (reveal && noted.length) ui.noteFilter = noted.every((n) => n.idea) ? 'ideas' : 'notes';
   data.notes.unshift(...noted);
   noted.forEach((n) => { ui.fresh.add(n.id); autoTitle(n); });
@@ -313,7 +316,7 @@ async function smartAdd(text, { viaVoice = false } = {}) {
     const entries = res.items.map((r) => {
       let l = r.list ? findListByName(r.list) : null;
       if (!l && r.list) {
-        l = { id: uid(), name: r.list[0].toUpperCase() + r.list.slice(1), icon: 'clipboard-list', color: nextColor() };
+        l = { id: uid(), name: r.list[0].toUpperCase() + r.list.slice(1), icon: 'clipboard-list', color: nextColor(), ...suggestStyle(r.list) };
         data.lists.push(l);
       }
       // "tra 20 minuti" → orario esatto; orario senza giorno → oggi o domani; avviso senza orario → alle 9
@@ -437,15 +440,16 @@ function renderNotes() {
   const all = [...data.notes].sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
   const nIdeas = all.filter((n) => n.idea).length;
   const nNotes = all.length - nIdeas;
-  // Appunti | Idee: le schede compaiono solo quando c'è almeno un'idea
-  const f = nIdeas ? (ui.noteFilter === 'ideas' ? 'ideas' : 'notes') : 'notes';
-  const notes = !nIdeas ? all : all.filter((n) => (f === 'ideas') === !!n.idea);
-  const seg = nIdeas ? `<div class="seg note-filter" id="noteFilter">
+  // Appunti | Idee: le schede compaiono quando c'è almeno un'idea (o se hai scelto Idee dal selettore)
+  const tabs = nIdeas || ideaMode();
+  const f = ideaMode() ? 'ideas' : 'notes';
+  const notes = !tabs ? all : all.filter((n) => (f === 'ideas') === !!n.idea);
+  const seg = tabs ? `<div class="seg note-filter" id="noteFilter">
       <button class="${f === 'notes' ? 'on' : ''}" data-f="notes">${icon('notes')}Appunti <span>${nNotes}</span></button>
       <button class="${f === 'ideas' ? 'on' : ''}" data-f="ideas">${icon('bulb')}Idee <span>${nIdeas}</span></button>
     </div>` : '';
   const none = `<div class="empty small"><p>${f === 'ideas' ? 'Nessuna idea' : 'Nessun appunto'}: detta o scrivi qui sotto.</p></div>`;
-  $('#main').innerHTML = (all.length
+  $('#main').innerHTML = (all.length || tabs
     ? `${seg}${notes.length ? `<ul class="items notes">${notes.map(noteHTML).join('')}</ul>` : none}`
     : `<div class="empty"><div class="empty-emo">${icon('notes')}</div><h2>Nessun appunto</h2><p>Detta o scrivi qui sotto: idee, informazioni, cose da ricordare.<br>Da qualsiasi lista basta iniziare con <i>"prendi nota…"</i></p></div>`);
   ui.fresh.clear();
@@ -590,11 +594,12 @@ function renderComposer() {
   btn.style.setProperty('--on', ink(t.color));
   const ai = aiReady(settings) && settings.aiMode === 'always';
   if (inNotes()) {
-    btn.innerHTML = icon('notes');
+    const idea = ideaMode();
+    btn.innerHTML = icon(idea ? 'bulb' : 'notes');
     btn.style.setProperty('--c', 'var(--accent)');
     btn.style.setProperty('--on', 'var(--on-accent)');
-    btn.title = 'Gli appunti finiscono nelle Note';
-    $('#newText').placeholder = 'Scrivi un appunto…';
+    btn.title = idea ? 'Finisce tra le Idee' : 'Gli appunti finiscono nelle Note';
+    $('#newText').placeholder = idea ? "Scrivi un'idea…" : 'Scrivi un appunto…';
     return updateGoButton();
   }
   btn.title = ai ? `Se non serve altro, finisce in ${t.name}` : `Aggiungi in ${t.name}`;
@@ -1037,7 +1042,8 @@ function openTrash() {
 // ---------- Crea / modifica lista ----------
 function editList(id) {
   const l = id ? listById(id) : null;
-  const draft = l ? { ...l } : { name: '', icon: 'clipboard-list', color: nextColor() };
+  const fallbackColor = nextColor();
+  const draft = l ? { ...l } : { name: '', icon: 'clipboard-list', color: fallbackColor };
   const count = l ? data.items.filter((i) => listOf(i).id === l.id).length : 0;
   openSheet(`
     <div class="sheet-head"><h2>${l ? 'Modifica lista' : 'Nuova lista'}</h2><button class="icon-btn" data-close aria-label="Chiudi">${icon('x')}</button></div>
@@ -1056,12 +1062,22 @@ function editList(id) {
     prev();
     const name = $('#lName', root);
     if (!l) setTimeout(() => name.focus(), 250);
-    name.addEventListener('input', () => { draft.name = name.value; prev(); });
+    // Lista nuova: icona e colore seguono il nome finché non li scegli tu
+    const picked = { icon: !!l, color: !!l };
+    const mark = (sel, attr, val) => root.querySelectorAll(`${sel} button`).forEach((x) => x.classList.toggle('on', x.dataset[attr] === val));
+    name.addEventListener('input', () => {
+      draft.name = name.value;
+      const st = suggestStyle(draft.name);
+      if (!picked.icon) { draft.icon = st?.icon || 'clipboard-list'; mark('#lEmo', 'e', draft.icon); }
+      if (!picked.color) { draft.color = st?.color || fallbackColor; mark('#lCol', 'c', draft.color); }
+      prev();
+    });
     name.addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#lSave', root).click(); });
     $('#lEmo', root).addEventListener('click', (e) => {
       const b = e.target.closest('[data-e]');
       if (!b) return;
       draft.icon = b.dataset.e;
+      picked.icon = true;
       root.querySelectorAll('#lEmo button').forEach((x) => x.classList.toggle('on', x === b));
       prev();
     });
@@ -1069,6 +1085,7 @@ function editList(id) {
       const b = e.target.closest('[data-c]');
       if (!b) return;
       draft.color = b.dataset.c;
+      picked.color = true;
       root.querySelectorAll('#lCol button').forEach((x) => x.classList.toggle('on', x === b));
       prev();
     });
@@ -1559,7 +1576,7 @@ function startVoice() {
   $('#voiceHint').textContent = 'Ti ascolto…';
   $('#voiceText').textContent = '';
   $('#voiceOrbIco').innerHTML = icon('mic');
-  $('#voiceTarget').innerHTML = inNotes() ? `${icon('notes')} Detta il tuo appunto` : aiReady(settings) && settings.aiMode !== 'off'
+  $('#voiceTarget').innerHTML = inNotes() ? (ideaMode() ? `${icon('bulb')} Detta la tua idea` : `${icon('notes')} Detta il tuo appunto`) : aiReady(settings) && settings.aiMode !== 'off'
     ? `${icon('sparkles')} L'AI smisterà nelle liste giuste`
     : `Finisce in <b>${listIcon(t)} ${esc(t.name)}</b>`;
   buzz(20);
@@ -1629,16 +1646,26 @@ function toggleTargetPicker(force) {
   const p = $('#targetPicker');
   const show = force ?? p.hidden;
   if (!show) { p.classList.remove('show'); setTimeout(() => (p.hidden = true), 180); return; }
-  const cur = targetList().id;
-  p.innerHTML = `<p class="picker-title">Aggiungi in…</p>` + data.lists.map((l) => `<button class="${l.id === cur ? 'on' : ''}" data-id="${l.id}" style="${cv(l.color)}"><span>${listIcon(l)}</span>${esc(l.name)}${l.id === cur ? icon('check') : ''}</button>`).join('');
+  const cur = inNotes() ? (ideaMode() ? '@ideas' : '@notes') : targetList().id;
+  const opt = (id, ico, name, style) => `<button class="${id === cur ? 'on' : ''}" data-id="${id}" style="${style}"><span>${ico}</span>${esc(name)}${id === cur ? icon('check') : ''}</button>`;
+  p.innerHTML = `<p class="picker-title">Aggiungi in…</p>` + data.lists.map((l) => opt(l.id, listIcon(l), l.name, cv(l.color))).join('')
+    + `<p class="picker-title">Oppure tra le note</p>` + opt('@notes', icon('notes'), 'Note', '--c:var(--accent)') + opt('@ideas', icon('bulb'), 'Idee', '--c:var(--accent)');
   p.hidden = false;
   requestAnimationFrame(() => p.classList.add('show'));
 }
 $('#targetPicker').addEventListener('click', (e) => {
   const b = e.target.closest('[data-id]');
   if (!b) return;
-  if (settings.view !== 'all') settings.view = b.dataset.id;
-  settings.target = b.dataset.id;
+  const id = b.dataset.id;
+  if (id.startsWith('@')) {
+    // Note e Idee: apre la sezione Note sulla scheda giusta
+    if (ui.search) clearSearch();
+    settings.view = 'notes';
+    ui.noteFilter = id === '@ideas' ? 'ideas' : 'notes';
+  } else {
+    if (settings.view !== 'all') settings.view = id;
+    settings.target = id;
+  }
   saveSettings();
   toggleTargetPicker(false);
   render();
@@ -1697,7 +1724,7 @@ function bind() {
     if (e.target.closest('[data-edit]') && li) return editItem(li.dataset.id);
     if (e.target.closest('[data-note]') && li) return editNote(li.dataset.id);
     const nf = e.target.closest('#noteFilter [data-f]');
-    if (nf) { ui.noteFilter = nf.dataset.f; buzz(5); return renderNotes(); }
+    if (nf) { ui.noteFilter = nf.dataset.f; buzz(5); renderNotes(); return renderComposer(); }
     const ans = e.target.closest('.answer[data-ref]');
     if (ans) {
       const [type, id] = ans.dataset.ref.split(':');

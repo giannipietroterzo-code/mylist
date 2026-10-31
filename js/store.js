@@ -3,7 +3,11 @@ const DATA_KEY = 'mylist.data.v1';
 const SET_KEY = 'mylist.settings.v1';
 
 // Palette giallo/grigio: gialli caldi + grigi, distinguibili tra loro
-export const LIST_COLORS = ['#F5B800', '#FFD84D', '#E89B00', '#C9A227', '#3F3F46', '#71717A', '#A1A1AA', '#57534E'];
+const YELLOW_GREY = ['#F5B800', '#FFD84D', '#E89B00', '#C9A227', '#3F3F46', '#71717A', '#A1A1AA', '#57534E'];
+// Natura: toni morbidi che stanno bene col giallo (salvia, eucalipto, azzurro polvere, terracotta,
+// rosa argilla, oliva, lavanda, sabbia)
+const NATURA = ['#8FA98A', '#6E9C94', '#7D9BB5', '#C98B6B', '#C9918F', '#A3A06A', '#9A93B5', '#D6BE8E'];
+export const LIST_COLORS = [...YELLOW_GREY, ...NATURA];
 const OLD_COLORS = ['#7C5CFF', '#FF5FA2', '#FF8A3D', '#F2B705', '#1FBF75', '#14B8A6', '#3B82F6', '#8B93A7'];
 // Icone disponibili per le liste (nomi Flaticon UIcons)
 export const LIST_ICONS = [
@@ -96,7 +100,7 @@ function normalize() {
     if (!l.icon) l.icon = EMOJI_TO_ICON[l.emoji] || 'clipboard-list';
     delete l.emoji;
     const i = OLD_COLORS.indexOf(l.color);
-    if (i >= 0) l.color = LIST_COLORS[i];
+    if (i >= 0) l.color = YELLOW_GREY[i];
     delete l.fixed;
   });
 }
@@ -174,7 +178,52 @@ export function restoreNote(id) {
   return note;
 }
 
+// Icona e colore proposti dal nome della lista ("Palestra" → manubrio, verde salvia).
+// Ogni regola: [icona, colore, inizi di parola che la fanno scattare]
+const STYLE_RULES = [
+  ['shopping-cart', '#C98B6B', ['spesa', 'supermercat', 'alimentar', 'acquist', 'market', 'grocer']],
+  ['tools', '#71717A', ['lavori', 'riparazion', 'manutenzion', 'bricolage', 'fai da te', 'attrezz']],
+  ['briefcase', '#7D9BB5', ['lavoro', 'ufficio', 'client', 'progett', 'riunion', 'business', 'work']],
+  ['broom', '#D6BE8E', ['pulizi', 'faccend']],
+  ['home', '#D6BE8E', ['casa', 'appartament', 'condomin', 'trasloc', 'home']],
+  ['bulb', '#FFD84D', ['idea', 'idee']],
+  ['phone-call', '#6E9C94', ['chiamat', 'telefon', 'chiamare', 'contatt', 'rubrica']],
+  ['gift', '#C9918F', ['regal', 'compleann', 'natale', 'anniversari']],
+  ['medicine', '#6E9C94', ['salute', 'medic', 'farmac', 'dottor', 'visit', 'dentist', 'terapi', 'pillol']],
+  ['car-side', '#57534E', ['auto', 'macchin', 'moto', 'garage', 'tagliand', 'meccanic']],
+  ['plane', '#7D9BB5', ['viagg', 'vacanz', 'ferie', 'valigi', 'volo', 'voli', 'trip']],
+  ['graduation-cap', '#9A93B5', ['scuol', 'universit', 'esam', 'studi', 'corso', 'corsi', 'compiti', 'tesi']],
+  ['gym', '#8FA98A', ['palestr', 'sport', 'allenament', 'fitness', 'corsa', 'calcio', 'nuoto', 'piscin', 'yoga', 'bici']],
+  ['paw', '#C98B6B', ['cane', 'cani', 'gatt', 'animal', 'veterinar', 'cucciol']],
+  ['baby', '#C9918F', ['bambin', 'bimb', 'figli', 'neonat', 'asilo']],
+  ['piggy-bank', '#A3A06A', ['spese', 'soldi', 'banca', 'bollett', 'finanz', 'conti', 'conto', 'pagament', 'tasse', 'risparm', 'budget']],
+  ['book', '#9A93B5', ['libr', 'lettur', 'leggere']],
+  ['film', '#57534E', ['film', 'serie', 'cinema', 'netflix', 'tv']],
+  ['utensils', '#C98B6B', ['ricett', 'cucin', 'cena', 'cene', 'pranz', 'ristorant', 'menu']],
+  ['leaf', '#8FA98A', ['giardin', 'piant', 'orto', 'fiori', 'balcon']],
+  ['glass-cheers', '#E89B00', ['aperitiv', 'event', 'cerimoni', 'matrimoni']],
+  ['party-horn', '#E89B00', ['festa', 'feste', 'party']],
+  ['users', '#6E9C94', ['amic', 'famigli', 'persone', 'team', 'gruppo']],
+  ['heart', '#C9918F', ['amore', 'coppia', 'romantic']],
+  ['music', '#9A93B5', ['music', 'concert', 'canzon', 'chitarr', 'piano']],
+  ['palette', '#C9918F', ['arte', 'disegn', 'pittur', 'hobby', 'creativ']],
+  ['coffee', '#C9A227', ['colazion', 'caff', 'bar']],
+  ['globe', '#7D9BB5', ['lingu', 'inglese', 'mondo']],
+  ['flame', '#E89B00', ['urgent', 'priorit', 'subito']],
+  ['star', '#FFD84D', ['preferit', 'desider', 'wishlist', 'sogni']],
+];
+export function suggestStyle(name) {
+  const words = norm(name).split(/[^a-z0-9]+/).filter(Boolean);
+  const text = words.join(' ');
+  for (const [icon, color, keys] of STYLE_RULES) {
+    if (keys.some((k) => (k.includes(' ') ? text.includes(k) : words.some((w) => w.startsWith(k))))) return { icon, color };
+  }
+  return null;
+}
+
+// Le liste nuove prendono prima i colori Natura, poi gialli e grigi
 export function nextColor() {
   const used = new Set(data.lists.map((l) => l.color));
-  return LIST_COLORS.find((c) => !used.has(c)) || LIST_COLORS[data.lists.length % LIST_COLORS.length];
+  const order = [...NATURA, ...YELLOW_GREY];
+  return order.find((c) => !used.has(c)) || order[data.lists.length % order.length];
 }

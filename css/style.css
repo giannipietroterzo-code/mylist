@@ -334,6 +334,7 @@ h1 {
 }
 .picker.show { transform: translateX(-50%); opacity: 1; }
 .picker-title { margin: 6px 10px 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); }
+.picker button + .picker-title { margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--surface-2); }
 .picker button {
   display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px; border-radius: 14px;
   font-weight: 600; text-align: left;
@@ -464,8 +465,8 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 .emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
 .emoji-grid button { aspect-ratio: 1; border-radius: 12px; font-size: 19px; display: grid; place-items: center; background: var(--surface); color: var(--text-2); transition: transform .1s; }
 .emoji-grid button.on { box-shadow: 0 0 0 2.5px var(--accent); transform: scale(1.06); color: var(--text); background: color-mix(in srgb, var(--accent) 18%, var(--surface)); }
-.swatches { display: flex; gap: 8px; flex-wrap: wrap; }
-.swatches button { width: 32px; height: 32px; border-radius: 50%; background: var(--c); transition: transform .12s; }
+.swatches { display: grid; grid-template-columns: repeat(8, minmax(0, 32px)); justify-content: space-between; gap: 10px 4px; }
+.swatches button { width: 100%; aspect-ratio: 1; border-radius: 50%; background: var(--c); transition: transform .12s; }
 .swatches button.on { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5.5px var(--c); transform: scale(1.05); }
 .shake { animation: shake .35s; }
 
