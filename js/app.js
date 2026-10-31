@@ -1106,21 +1106,21 @@ function manageLists() {
 // ---------- Impostazioni: IA di Chrome ----------
 function chromeAIBox() {
   const st = chromeAI.state;
-  const used = aiSource(settings) === 'chrome';
   const line = (cls, ico, html) => `<p class="ai-status ${cls}">${icon(ico)}<span>${html}</span></p>`;
   if (st === 'available') {
-    return line('ok', 'check', used
-      ? '<b>Pronta e in uso</b>: gratis e sul dispositivo. Con una chiave OpenRouter i risultati sono migliori.'
-      : '<b>Pronta</b>: entra in gioco se OpenRouter non risponde.');
+    return line('ok', 'check', settings.chromeAI
+      ? `<b>Presente e attiva</b>: risponde per prima, gratis e sul dispositivo.${settings.apiKey ? ' Se non ce la fa, passa a OpenRouter.' : ''}`
+      : '<b>Presente</b> su questo dispositivo, ma spenta.');
   }
-  if (st === 'downloadable') return `${line('', 'download', "Questo dispositivo può usarla: va scaricata una volta (qualche GB, meglio col Wi-Fi).")}<button class="pill-btn wide ghost" id="sChromeDl">${icon('download')}Scarica l'IA di Chrome</button>`;
-  if (st === 'downloading') return line('', 'download', `Download in corso… ${Math.round(chromeAI.progress * 100)}%`);
-  if (st === 'unavailable') return line('muted', 'warn', 'Questo dispositivo non ha i requisiti (servono molta memoria e spazio libero).');
-  return line('muted', 'warn', "Non presente in questo browser: per ora c'è solo su Chrome per computer, su Android non ancora. Quando Google la attiverà, MyList la userà da sola.");
+  if (st === 'downloadable') return `${line('', 'download', '<b>Presente</b>, ma il modello va scaricato una volta (qualche GB, meglio col Wi-Fi).')}<button class="pill-btn wide ghost" id="sChromeDl">${icon('download')}Scarica l'IA di Chrome</button>`;
+  if (st === 'downloading') return line('', 'download', `<b>Download in corso…</b> ${Math.round(chromeAI.progress * 100)}%`);
+  if (st === 'unavailable') return line('muted', 'warn', '<b>Non utilizzabile</b>: questo dispositivo non ha i requisiti (servono molta memoria e spazio libero).');
+  return line('muted', 'warn', "<b>Non presente</b> in questo browser: per ora c'è solo su Chrome per computer, su Android non ancora.");
 }
 function bindChromeAI(root) {
+  const box = $('#sChromeAI', root);
+  const refresh = () => { box.innerHTML = chromeAIBox(); bindChromeAI(root); renderComposer(); };
   $('#sChromeDl', root)?.addEventListener('click', async () => {
-    const box = $('#sChromeAI', root);
     try {
       await downloadChromeAI(() => { box.innerHTML = chromeAIBox(); });
       toast('IA di Chrome pronta');
@@ -1128,10 +1128,32 @@ function bindChromeAI(root) {
       await detectChromeAI();
       toast(`Download non riuscito: ${err.message}`);
     }
-    box.innerHTML = chromeAIBox();
-    $('#sTest', root).disabled = !aiReady(settings);
-    render();
+    refresh();
   });
+  const on = $('#sChromeOn', root);
+  if (on) on.onchange = () => { settings.chromeAI = on.checked; saveSettings(); refresh(); };
+  const test = $('#sChromeTest', root);
+  if (test) test.onclick = async () => {
+    const st = $('#sChromeStatus', root);
+    st.className = 'status small';
+    st.textContent = 'Controllo…';
+    await detectChromeAI();
+    refresh();
+    if (chromeAI.state !== 'available') {
+      st.classList.add('err');
+      st.textContent = chromeAI.state === 'downloadable' ? 'C\'è, ma prima va scaricata.' : chromeAI.state === 'downloading' ? 'Sta ancora scaricando, riprova tra poco.' : 'Non disponibile su questo browser.';
+      return;
+    }
+    st.textContent = 'Presente, le faccio una domanda…';
+    try {
+      const r = await testConnection(settings, 'chrome');
+      st.classList.add('ok');
+      st.textContent = `Funziona! Ha risposto "${r.reply.slice(0, 20)}" in ${r.ms} ms`;
+    } catch (err) {
+      st.classList.add('err');
+      st.textContent = `Errore: ${err.message}`;
+    }
+  };
 }
 
 // ---------- Impostazioni: promemoria ----------
@@ -1216,17 +1238,26 @@ function openSettings() {
       <a class="link small" href="https://openrouter.ai/keys" target="_blank" rel="noopener">Crea una chiave su openrouter.ai →</a>
 
       <label class="lbl">Modello</label>
-      <button class="model-btn" id="sModel"><span><b id="sModelName">${esc(settings.model)}</b><small>Tocca per scegliere dall'elenco OpenRouter</small></span>${icon('chevron')}</button>
+      <button class="model-btn" id="sModel"><span><b id="sModelName">${esc(settings.model)}</b><small>Tocca per scegliere tra i consigliati</small></span>${icon('chevron')}</button>
 
       <label class="lbl">Quando usarlo</label>
       ${seg('aiMode', settings.aiMode, [['always', 'Sempre'], ['voice', 'Solo dettatura'], ['off', 'Mai']])}
       <p class="muted small">L'AI capisce la nota e dove vuoi metterla ("mettilo nel lavoro", "per casa"…). Se non lo dici, sceglie lei la lista più adatta.</p>
 
-      <label class="lbl">IA di Chrome (senza chiave)</label>
-      <div id="sChromeAI">${chromeAIBox()}</div>
-
-      <button class="pill-btn wide ghost top-gap" id="sTest" ${aiReady(settings) ? '' : 'disabled'}>${icon('bolt')}Prova connessione</button>
+      <button class="pill-btn wide ghost top-gap" id="sTest" ${settings.apiKey ? '' : 'disabled'}>${icon('bolt')}Prova OpenRouter</button>
       <p class="status small" id="sStatus"></p>
+    </section>
+
+    <section class="card">
+      <h3>${icon('globe')}IA di Chrome</h3>
+      <p class="muted small">L'IA integrata nel browser: gratis, senza chiave e senza mandare nulla in rete. Meno brava di OpenRouter con le frasi complicate.</p>
+      <div id="sChromeAI">${chromeAIBox()}</div>
+      <label class="switch-row">
+        <span><b>Usala per prima</b><small>Risponde lei; OpenRouter resta di riserva</small></span>
+        <input type="checkbox" class="switch" id="sChromeOn" ${settings.chromeAI ? 'checked' : ''}>
+      </label>
+      <button class="pill-btn wide ghost top-gap" id="sChromeTest">${icon('bolt')}Prova l'IA di Chrome</button>
+      <p class="status small" id="sChromeStatus"></p>
     </section>
 
     <section class="card">
@@ -1301,7 +1332,7 @@ function openSettings() {
       settings.apiKey = key.value.trim();
       saveSettings();
       renderComposer();
-      $('#sTest', root).disabled = !aiReady(settings);
+      $('#sTest', root).disabled = !settings.apiKey;
       $('#sChromeAI', root).innerHTML = chromeAIBox();
       bindChromeAI(root);
     });
@@ -1323,7 +1354,7 @@ function openSettings() {
       st.className = 'status small';
       st.textContent = 'Provo…';
       try {
-        const r = await testConnection(settings);
+        const r = await testConnection(settings, 'openrouter');
         st.classList.add('ok');
         st.textContent = `Funziona! ${r.model} ha risposto in ${r.ms} ms`;
       } catch (err) {
@@ -1354,10 +1385,21 @@ function openSettings() {
   });
 }
 
+// Modelli consigliati: per ogni famiglia prendo la versione più recente del listino OpenRouter,
+// così l'elenco resta aggiornato da solo quando escono modelli nuovi
+const RECOMMENDED = [
+  { re: /^anthropic\/claude-haiku-[\d.]+$/, note: 'Il più affidabile con l\'italiano' },
+  { re: /^openai\/gpt-[\d.]+-luna$/, note: 'Equilibrato, di OpenAI' },
+  { re: /^google\/gemini-[\d.]+-flash-lite$/, note: 'Veloce, di Google' },
+  { re: /^deepseek\/deepseek-v[\d.]+-flash$/, note: 'Il più economico' },
+];
+// Stima del costo: ~20 dettature al giorno, ~3500 token in entrata e ~200 in uscita ciascuna
+const monthly = (m) => (600 * (3500 * m.prompt + 200 * m.completion)) / 1e6;
+const euro = (v) => (v < 0.01 ? 'meno di 1 cent' : v < 1 ? `~${Math.round(v * 100)} cent` : `~${v.toFixed(2).replace('.', ',')} $`) + '/mese';
+
 async function openModelPicker() {
   openSheet(`
     <div class="sheet-head"><button class="icon-btn" id="mBack" aria-label="Indietro">${icon('back')}</button><h2>Scegli il modello</h2><span></span></div>
-    <div class="search in-sheet"><span class="search-ico">${icon('search')}</span><input id="mSearch" type="search" placeholder="Cerca (es. gemini, gpt, claude, free)…" autocomplete="off"></div>
     <div id="mList" class="models"><p class="muted center">Carico i modelli…</p></div>
   `, async (root) => {
     $('#mBack', root).onclick = openSettings;
@@ -1366,31 +1408,22 @@ async function openModelPicker() {
       models = await listModels();
     } catch (e) {
       $('#mList', root).innerHTML = `<p class="muted center">Non riesco a caricare l'elenco (sei offline?).<br>Puoi scrivere l'ID a mano:</p>
-        <input class="field" id="mManual" placeholder="es. google/gemini-2.5-flash" value="${esc(settings.model)}">`;
+        <input class="field" id="mManual" placeholder="es. anthropic/claude-haiku-5.5" value="${esc(settings.model)}">`;
       $('#mManual', root).onchange = (ev) => { settings.model = ev.target.value.trim() || 'openrouter/auto'; saveSettings(); };
       return;
     }
-    const price = (m) => (m.prompt === 0 && m.completion === 0 ? '<span class="free">GRATIS</span>' : `$${m.prompt.toFixed(2)} · $${m.completion.toFixed(2)}`);
-    const row = (m) => `<button class="model ${m.id === settings.model ? 'on' : ''}" data-id="${esc(m.id)}">
-      <span><b>${esc(m.name)}</b><small>${esc(m.id)}</small></span><em>${price(m)}</em></button>`;
-    const draw = () => {
-      const q = norm($('#mSearch', root).value);
-      let html = '';
-      if (!q) {
-        const picks = models
-          // niente varianti :batch (lente) né alias ~…-latest (cambiano modello da soli)
-          .filter((m) => !m.id.includes(':') && !m.id.startsWith('~') && /flash|mini|haiku|small|lite|nano/i.test(m.id) && m.prompt > 0 && m.prompt < 1 && !/image|audio|vision|embed/i.test(m.id))
-          .sort((a, b) => b.created - a.created)
-          .slice(0, 8);
-        html += `<h4>Consigliati: veloci ed economici</h4>` + row({ id: 'openrouter/auto', name: 'Auto (sceglie OpenRouter)', prompt: -1, completion: -1 }).replace(/<em>.*<\/em>/, '<em>variabile</em>') + picks.map(row).join('');
-        html += `<h4>Tutti i modelli (prezzo per 1M token in · out)</h4>`;
-      }
-      const all = models.filter((m) => !m.id.endsWith(':batch') && (!q || norm(m.id + ' ' + m.name).includes(q) || (q === 'free' && m.prompt === 0)));
-      html += all.sort((a, b) => a.prompt - b.prompt).slice(0, 150).map(row).join('') || '<p class="muted center">Nessun modello trovato</p>';
-      $('#mList', root).innerHTML = html;
-    };
-    draw();
-    $('#mSearch', root).addEventListener('input', draw);
+    const picks = RECOMMENDED.map((r) => {
+      const m = models.filter((x) => r.re.test(x.id)).sort((a, b) => b.created - a.created)[0];
+      return m && { ...m, note: r.note };
+    }).filter(Boolean);
+    const row = (m, cost) => `<button class="model ${m.id === settings.model ? 'on' : ''}" data-id="${esc(m.id)}">
+      <span><b>${esc(m.name.replace(/^[^:]+:\s*/, ''))}</b><small>${esc(m.note)}</small></span><em>${cost}</em></button>`;
+    let html = row({ id: 'openrouter/auto', name: 'Auto', note: 'Sceglie OpenRouter caso per caso' }, 'variabile') + picks.map((m) => row(m, euro(monthly(m)))).join('');
+    // il modello scelto in passato resta visibile anche se non è tra i consigliati
+    const cur = settings.model !== 'openrouter/auto' && !picks.some((m) => m.id === settings.model) && models.find((m) => m.id === settings.model);
+    if (cur) html = `<h4>In uso adesso</h4>${row({ ...cur, note: 'Non è tra i consigliati' }, euro(monthly(cur)))}<h4>Consigliati</h4>` + html;
+    html += `<p class="muted small center">Costo stimato con circa 20 dettature al giorno.</p>`;
+    $('#mList', root).innerHTML = html;
     $('#mList', root).addEventListener('click', (e) => {
       const b = e.target.closest('[data-id]');
       if (!b) return;

@@ -54,6 +54,7 @@ export const DEFAULT_SETTINGS = {
   target: 'inbox',
   ntfyTopic: '', // canale ntfy per gli avvisi ad app chiusa ('' = spento)
   alertLevel: 'loud', // loud | normal: quanto si fanno sentire i promemoria
+  chromeAI: false, // IA di Chrome attivata: risponde prima di OpenRouter
 };
 
 function read(key, fallback) {

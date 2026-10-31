@@ -44,13 +44,13 @@ Per l'installazione e per il microfono serve **HTTPS**. Il modo più rapido, gra
 
 1. Crea una chiave su <https://openrouter.ai/keys> (consiglio: imposta un **limite di spesa** sulla chiave).
 2. In MyList: ⚙️ **Impostazioni → Smistamento intelligente** → incolla la chiave.
-3. **Modello**: tocca il campo e scegli dall'elenco (caricato in tempo reale da OpenRouter, con i prezzi). In cima ci sono i consigliati veloci ed economici; per questo compito basta un modello piccolo: costa frazioni di centesimo a voce.
+3. **Modello**: tocca il campo e scegli tra i consigliati (Auto, Claude Haiku, GPT Luna, Gemini Flash Lite, DeepSeek Flash). L'elenco prende da OpenRouter la versione più recente di ogni famiglia e mostra il costo stimato al mese con circa 20 dettature al giorno: qualche decina di centesimi.
 4. **Prova connessione** per verificare.
 5. **Quando usarlo**: *Sempre* (default: testo scritto e dettato), *Solo dettatura* o *Mai*. Scrivere `#lista` salta l'AI e va dritto in quella lista.
 
 Se l'AI non risponde, la voce viene aggiunta comunque, così com'è, nella lista corrente.
 
-**Senza chiave: IA di Chrome.** Se non c'è una chiave OpenRouter (o OpenRouter non risponde), MyList prova l'IA integrata in Chrome (Gemini Nano, gratis e sul dispositivo). Oggi esiste solo su Chrome per computer con hardware adeguato (Windows, macOS, Linux; tanta memoria e spazio libero) e si scarica una volta da Impostazioni → Smistamento intelligente. **Su Chrome per Android non è ancora disponibile**: lì, senza chiave, MyList usa le regole locali e passerà da sola all'IA di Chrome quando Google la attiverà. L'italiano non è ancora tra le lingue ufficiali di Gemini Nano, quindi la qualità è inferiore a OpenRouter.
+**IA di Chrome.** In Impostazioni → IA di Chrome vedi se il browser ce l'ha (presente, da scaricare, non utilizzabile, non presente), puoi scaricarla e provarla col pulsante *Prova l'IA di Chrome*. Con l'interruttore **Usala per prima** risponde lei (Gemini Nano, gratis e sul dispositivo) e OpenRouter resta di riserva se non ce la fa; da spenta non viene mai usata. Oggi esiste solo su Chrome per computer con hardware adeguato (Windows, macOS, Linux; tanta memoria e spazio libero). **Su Chrome per Android non è ancora disponibile.** L'italiano non è ancora tra le lingue ufficiali di Gemini Nano, quindi la qualità è inferiore a OpenRouter.
 
 **Privacy**: liste e chiave restano solo nel `localStorage` del telefono. All'AI vengono inviati solo la nota, i nomi delle liste e le ultime voci di ciascuna (per capire a cosa serve ogni lista).
 

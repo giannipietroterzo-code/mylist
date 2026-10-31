@@ -1,9 +1,9 @@
 // Intelligenza artificiale di MyList: trasforma una frase libera in voci, appunti, ricerche.
-// Due motori, in quest'ordine:
-//  1. OpenRouter, se c'è una chiave (il migliore: modelli grandi, italiano ottimo)
-//  2. l'IA integrata in Chrome (Gemini Nano, gratis e sul dispositivo), se il browser ce l'ha.
-//     Oggi esiste solo su Chrome per computer con hardware adeguato; su Android non ancora:
-//     lì MyList usa le regole locali finché Google non la attiva.
+// Due motori:
+//  - OpenRouter, se c'è una chiave (modelli grandi, italiano ottimo)
+//  - l'IA integrata in Chrome (Gemini Nano, gratis e sul dispositivo), solo se l'utente la attiva:
+//    in quel caso risponde per prima e OpenRouter resta di riserva.
+//    Oggi esiste solo su Chrome per computer con hardware adeguato; su Android non ancora.
 const API = 'https://openrouter.ai/api/v1';
 
 const hasKey = (s) => !!(s.apiKey && s.apiKey.trim());
@@ -27,17 +27,20 @@ export async function downloadChromeAI(onProgress) {
   chromeAI.state = 'available';
 }
 
-// Quale motore risponde: 'openrouter' | 'chrome' | null
-export const aiSource = (s) => (s.aiMode === 'off' ? null : hasKey(s) ? 'openrouter' : chromeAI.state === 'available' ? 'chrome' : null);
+const chromeOn = (s) => !!s.chromeAI && chromeAI.state === 'available';
+// Quale motore risponde per primo: 'chrome' | 'openrouter' | null
+export const aiSource = (s) => (s.aiMode === 'off' ? null : chromeOn(s) ? 'chrome' : hasKey(s) ? 'openrouter' : null);
 export const aiReady = (s) => !!aiSource(s);
 
 async function chat(settings, messages, opts = {}) {
-  if (aiSource(settings) === 'chrome') return chatChrome(messages, opts);
+  const first = aiSource(settings);
+  const backup = first === 'chrome' ? (hasKey(settings) ? 'openrouter' : null) : chromeOn(settings) ? 'chrome' : null;
+  const run = (engine) => (engine === 'chrome' ? chatChrome(messages, opts) : chatOpenRouter(settings, messages, opts));
   try {
-    return await chatOpenRouter(settings, messages, opts);
+    return await run(first);
   } catch (err) {
-    // OpenRouter non risponde (rete, credito, modello): se c'è, prova con l'IA di Chrome
-    if (chromeAI.state === 'available') return chatChrome(messages, opts);
+    // il primo motore non risponde: se c'è, prova con l'altro
+    if (backup) return run(backup);
     throw err;
   }
 }
@@ -237,9 +240,11 @@ export async function makeTitle(text, settings) {
   return t.trim().split('\n')[0].replace(/^["“'«]+|["”'».]+$/g, '').trim().slice(0, 60);
 }
 
-export async function testConnection(settings) {
+// engine: 'openrouter' | 'chrome' — prova quel motore e solo quello
+export async function testConnection(settings, engine = 'openrouter') {
   const t0 = performance.now();
-  const r = await chat(settings, [{ role: 'user', content: 'Rispondi solo con: OK' }], { timeout: 20000, maxTokens: 10 });
+  const msg = [{ role: 'user', content: 'Rispondi solo con: OK' }];
+  const r = engine === 'chrome' ? await chatChrome(msg) : await chatOpenRouter(settings, msg, { timeout: 20000, maxTokens: 10 });
   return { ms: Math.round(performance.now() - t0), model: r.model, reply: r.text.trim() };
 }
 
