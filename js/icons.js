@@ -32,6 +32,7 @@ const MAP = {
   notes: 'notebook',
   copy: 'copy',
   share: 'share',
+  restore: 'undo',
 };
 
 export function icon(name, cls = '') {

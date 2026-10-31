@@ -1,7 +1,7 @@
 import { icon, listIcon } from './icons.js';
 import {
   data, settings, saveData, saveSettings, snapshot, replaceData, resetAll,
-  uid, norm, findListByName, nextColor, LIST_COLORS, LIST_ICONS,
+  uid, norm, findListByName, nextColor, LIST_COLORS, LIST_ICONS, trashNote, restoreNote, TRASH_DAYS,
 } from './store.js';
 import { voiceSupported, listen } from './voice.js';
 
@@ -445,9 +445,11 @@ function renderNotes() {
       <button class="${f === 'ideas' ? 'on' : ''}" data-f="ideas">${icon('bulb')}Idee <span>${nIdeas}</span></button>
     </div>` : '';
   const none = `<div class="empty small"><p>${f === 'ideas' ? 'Nessuna idea' : 'Nessun appunto'}: detta o scrivi qui sotto.</p></div>`;
-  $('#main').innerHTML = all.length
+  const nt = data.trash.length;
+  const trash = nt ? `<button class="trash-link" id="openTrash">${icon('trash')}Eliminati di recente <span>${nt}</span></button>` : '';
+  $('#main').innerHTML = (all.length
     ? `${seg}${notes.length ? `<ul class="items notes">${notes.map(noteHTML).join('')}</ul>` : none}`
-    : `<div class="empty"><div class="empty-emo">${icon('notes')}</div><h2>Nessun appunto</h2><p>Detta o scrivi qui sotto: idee, informazioni, cose da ricordare.<br>Da qualsiasi lista basta iniziare con <i>"prendi nota…"</i></p></div>`;
+    : `<div class="empty"><div class="empty-emo">${icon('notes')}</div><h2>Nessun appunto</h2><p>Detta o scrivi qui sotto: idee, informazioni, cose da ricordare.<br>Da qualsiasi lista basta iniziare con <i>"prendi nota…"</i></p></div>`) + trash;
   ui.fresh.clear();
 }
 
@@ -646,7 +648,7 @@ function deleteItem(id) {
 
 function deleteNote(id) {
   const restore = snapshot();
-  data.notes = data.notes.filter((n) => n.id !== id);
+  trashNote(id);
   saveData();
   collapseThen(document.querySelector(`.item[data-id="${id}"]`), render);
   buzz(10);
@@ -973,10 +975,61 @@ function editNote(id) {
     };
     $('#nDel', root).onclick = () => {
       closeSheet();
-      data.notes = data.notes.filter((x) => x.id !== id);
+      trashNote(id);
       saveData();
       render();
       toast('Appunto eliminato', 'Annulla', () => { restore(); render(); });
+    };
+  });
+}
+
+// ---------- Appunti eliminati: si recuperano per 60 giorni ----------
+function openTrash() {
+  const left = (n) => Math.max(1, Math.ceil(TRASH_DAYS - (Date.now() - n.deletedAt) / 864e5));
+  const ago = (n) => {
+    const d = Math.floor((Date.now() - n.deletedAt) / 864e5);
+    return d < 1 ? 'oggi' : d === 1 ? 'ieri' : `${d} giorni fa`;
+  };
+  const row = (n) => `<li class="trash-row" data-id="${n.id}">
+      <div class="body">
+        <div class="text">${esc(noteTitle(n))}</div>
+        ${n.text && n.text !== noteTitle(n) ? `<div class="note-text">${esc(n.text)}</div>` : ''}
+        <div class="meta">${n.idea ? `<span class="tag idea">${icon('bulb')}Idea</span>` : ''}<span class="tag due">${icon('trash')}Eliminato ${ago(n)}</span><span class="tag due">${icon('clock')}Ancora ${left(n) === 1 ? '1 giorno' : `${left(n)} giorni`}</span></div>
+      </div>
+      <button class="pill-btn ghost" data-restore="${n.id}">${icon('restore')}Ripristina</button>
+    </li>`;
+  const draw = (root) => {
+    const list = [...data.trash].sort((a, b) => b.deletedAt - a.deletedAt);
+    $('#tList', root).innerHTML = list.length
+      ? `<ul class="trash-list">${list.map(row).join('')}</ul>`
+      : `<p class="muted center">Il cestino è vuoto.</p>`;
+    $('#tEmpty', root).hidden = !list.length;
+  };
+  openSheet(`
+    <div class="sheet-head"><h2>Eliminati di recente</h2><button class="icon-btn" data-close aria-label="Chiudi">${icon('x')}</button></div>
+    <p class="muted small">Gli appunti eliminati restano qui ${TRASH_DAYS} giorni, poi spariscono per sempre.</p>
+    <div id="tList"></div>
+    <button class="pill-btn wide danger ghost top-gap" id="tEmpty">${icon('trash')}Svuota il cestino</button>
+  `, (root) => {
+    draw(root);
+    $('#tList', root).addEventListener('click', (e) => {
+      const b = e.target.closest('[data-restore]');
+      if (!b) return;
+      const n = restoreNote(b.dataset.restore);
+      if (!n) return;
+      ui.fresh.add(n.id);
+      ui.noteFilter = n.idea ? 'ideas' : 'notes';
+      saveData();
+      buzz(8);
+      toast(`Ripristinato: ${noteTitle(n)}`);
+      if (data.trash.length) { draw(root); render(); } else { closeSheet(); render(); }
+    });
+    $('#tEmpty', root).onclick = () => {
+      if (!confirm('Eliminare per sempre tutti gli appunti nel cestino? Non si può annullare.')) return;
+      data.trash = [];
+      saveData();
+      closeSheet();
+      render();
     };
   });
 }
@@ -1639,6 +1692,7 @@ function bind() {
     if (e.target.closest('[data-note]') && li) return editNote(li.dataset.id);
     const nf = e.target.closest('#noteFilter [data-f]');
     if (nf) { ui.noteFilter = nf.dataset.f; buzz(5); return renderNotes(); }
+    if (e.target.closest('#openTrash')) return openTrash();
     const ans = e.target.closest('.answer[data-ref]');
     if (ans) {
       const [type, id] = ans.dataset.ref.split(':');

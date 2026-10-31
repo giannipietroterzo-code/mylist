@@ -38,6 +38,8 @@ function defaultData() {
     ],
     // appunti: { id, title, text, createdAt, updatedAt }
     notes: [],
+    // appunti eliminati, recuperabili per TRASH_DAYS: { ...appunto, deletedAt }
+    trash: [],
   };
 }
 
@@ -77,9 +79,18 @@ if ((settings.sv || 1) < 2) {
 }
 try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch (e) {}
 
+export const TRASH_DAYS = 60;
+// Gli appunti eliminati da più di 60 giorni spariscono per sempre
+function pruneTrash() {
+  const limit = Date.now() - TRASH_DAYS * 864e5;
+  data.trash = data.trash.filter((n) => n.deletedAt > limit);
+}
+
 // Serve sempre almeno una lista; i colori della vecchia palette passano a giallo/grigio
 function normalize() {
   if (!Array.isArray(data.notes)) data.notes = [];
+  if (!Array.isArray(data.trash)) data.trash = [];
+  pruneTrash();
   if (!data.lists.length) data.lists.push({ id: uid(), name: 'Inbox', icon: 'inbox-in', color: LIST_COLORS[0] });
   data.lists.forEach((l) => {
     if (!l.icon) l.icon = EMOJI_TO_ICON[l.emoji] || 'clipboard-list';
@@ -93,6 +104,7 @@ normalize();
 try { localStorage.setItem(DATA_KEY, JSON.stringify(data)); } catch (e) {}
 
 export function saveData() {
+  pruneTrash();
   localStorage.setItem(DATA_KEY, JSON.stringify(data));
   window.dispatchEvent(new Event('mylist:saved')); // i promemoria si riprogrammano da soli
 }
@@ -108,6 +120,7 @@ export function snapshot() {
     data.lists = prev.lists;
     data.items = prev.items;
     data.notes = prev.notes || [];
+    data.trash = prev.trash || [];
     saveData();
   };
 }
@@ -117,6 +130,7 @@ export function replaceData(next) {
   data.lists = next.lists;
   data.items = next.items;
   data.notes = Array.isArray(next.notes) ? next.notes : [];
+  data.trash = Array.isArray(next.trash) ? next.trash : [];
   normalize();
   saveData();
 }
@@ -126,6 +140,7 @@ export function resetAll() {
   data.lists = d.lists;
   data.items = d.items;
   data.notes = d.notes;
+  data.trash = d.trash;
   saveData();
 }
 
@@ -141,6 +156,22 @@ export function findListByName(name) {
     data.lists.find((l) => n.startsWith(norm(l.name)) && norm(l.name).length >= 3) ||
     null
   );
+}
+
+// Elimina un appunto tenendolo nel cestino; restoreNote lo rimette tra gli appunti
+export function trashNote(id) {
+  const n = data.notes.find((x) => x.id === id);
+  if (!n) return;
+  data.notes = data.notes.filter((x) => x !== n);
+  data.trash.unshift({ ...n, deletedAt: Date.now() });
+}
+export function restoreNote(id) {
+  const n = data.trash.find((x) => x.id === id);
+  if (!n) return null;
+  data.trash = data.trash.filter((x) => x !== n);
+  const { deletedAt, ...note } = n;
+  data.notes.unshift(note);
+  return note;
 }
 
 export function nextColor() {

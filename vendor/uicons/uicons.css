@@ -59,6 +59,7 @@ i[class^=fi-rr-]:before,i[class*=" fi-rr-"]:before{font-family:uicons-regular-ro
 .fi-rr-tools:before{content:"\fdcb"}
 .fi-rr-trash:before{content:"\fe17"}
 .fi-rr-triangle-warning:before{content:"\fe33"}
+.fi-rr-undo:before{content:"\fe6b"}
 .fi-rr-upload:before{content:"\fe75"}
 .fi-rr-users:before{content:"\fea6"}
 .fi-rr-utensils:before{content:"\fea8"}
