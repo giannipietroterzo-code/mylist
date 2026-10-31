@@ -284,6 +284,7 @@ h1 {
 }
 .empty h2 { margin: 0 0 6px; color: var(--text); font-size: 20px; letter-spacing: -.01em; }
 .empty p { margin: 0; font-size: 15px; }
+.empty.small { padding: 28px 20px; }
 
 /* ---------- Composer ---------- */
 .composer {

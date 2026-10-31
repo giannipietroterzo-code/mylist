@@ -185,7 +185,7 @@ function addItems(entries, { reveal = false, done = [], notes = [] } = {}) {
   });
   const finishing = done.map((id) => data.items.find((i) => i.id === id && !i.done)).filter(Boolean);
   const noted = notes.filter((n) => n.text).map((n, i) => ({ id: uid(), title: n.title || '', titleFor: n.title ? n.text : null, text: n.text, idea: !!n.idea, createdAt: now - i, updatedAt: now - i }));
-  if (reveal && noted.length) ui.noteFilter = 'all';
+  if (reveal && noted.length) ui.noteFilter = noted.every((n) => n.idea) ? 'ideas' : 'notes';
   data.notes.unshift(...noted);
   noted.forEach((n) => { ui.fresh.add(n.id); autoTitle(n); });
   if (!added.length && !finishing.length && !noted.length) return;
@@ -436,16 +436,17 @@ function noteHTML(n) {
 function renderNotes() {
   const all = [...data.notes].sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
   const nIdeas = all.filter((n) => n.idea).length;
-  const f = nIdeas ? ui.noteFilter || 'all' : 'all';
-  const notes = f === 'ideas' ? all.filter((n) => n.idea) : f === 'notes' ? all.filter((n) => !n.idea) : all;
-  // filtro "Idee" solo quando ce n'è almeno una
+  const nNotes = all.length - nIdeas;
+  // Appunti | Idee: le schede compaiono solo quando c'è almeno un'idea
+  const f = nIdeas ? (ui.noteFilter === 'ideas' ? 'ideas' : 'notes') : 'notes';
+  const notes = !nIdeas ? all : all.filter((n) => (f === 'ideas') === !!n.idea);
   const seg = nIdeas ? `<div class="seg note-filter" id="noteFilter">
-      <button class="${f === 'all' ? 'on' : ''}" data-f="all">Tutti</button>
+      <button class="${f === 'notes' ? 'on' : ''}" data-f="notes">${icon('notes')}Appunti <span>${nNotes}</span></button>
       <button class="${f === 'ideas' ? 'on' : ''}" data-f="ideas">${icon('bulb')}Idee <span>${nIdeas}</span></button>
-      <button class="${f === 'notes' ? 'on' : ''}" data-f="notes">Appunti</button>
     </div>` : '';
+  const none = `<div class="empty small"><p>${f === 'ideas' ? 'Nessuna idea' : 'Nessun appunto'}: detta o scrivi qui sotto.</p></div>`;
   $('#main').innerHTML = all.length
-    ? `${seg}<ul class="items notes">${notes.map(noteHTML).join('')}</ul>`
+    ? `${seg}${notes.length ? `<ul class="items notes">${notes.map(noteHTML).join('')}</ul>` : none}`
     : `<div class="empty"><div class="empty-emo">${icon('notes')}</div><h2>Nessun appunto</h2><p>Detta o scrivi qui sotto: idee, informazioni, cose da ricordare.<br>Da qualsiasi lista basta iniziare con <i>"prendi nota…"</i></p></div>`;
   ui.fresh.clear();
 }
