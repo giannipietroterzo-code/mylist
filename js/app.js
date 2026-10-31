@@ -360,7 +360,7 @@ function renderHeader() {
   const notes = inNotes() && !searching;
   const title = searching ? 'Risultati' : notes ? `<span class="t-ico">${icon('notes')}</span><span class="t-txt">Note</span>`
     : l ? `<span class="t-ico" style="${cv(l.color)}">${listIcon(l)}</span><span class="t-txt">${esc(l.name)}</span>` : '<span class="t-txt">Tutte</span>';
-  $('#viewTitle').innerHTML = `${title}${VERSION ? `<span class="ver">v${VERSION}</span>` : ''}`;
+  $('#viewTitle').innerHTML = title;
   const n = openCount(l?.id);
   const today = new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
   const nn = data.notes.length;
@@ -384,7 +384,8 @@ function renderChips() {
   }).join('');
   const nn = data.notes.length;
   const notes = `<button class="chip notes ${inNotes() ? 'on' : ''}" data-view="notes">${icon('notes', 'chip-emo')}Note${nn ? ` <b>${nn}</b>` : ''}</button>`;
-  chips.innerHTML = all + notes + ls + `<button class="chip add" id="chipAdd" aria-label="Nuova lista">${icon('plus')}</button>`;
+  // Note sempre in fondo, dopo le categorie
+  chips.innerHTML = all + ls + `<button class="chip add" id="chipAdd" aria-label="Nuova lista">${icon('plus')}</button>` + notes;
   chips.querySelector('.chip.on')?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
 }
 
@@ -1673,6 +1674,7 @@ function handleLaunchParams() {
 }
 
 if (!listById(settings.view) && settings.view !== 'all' && settings.view !== 'notes') settings.view = 'all';
+$('#brandVer').textContent = VERSION ? `v${VERSION}` : '';
 applyTheme();
 bind();
 render();

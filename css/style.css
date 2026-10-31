@@ -133,7 +133,7 @@ input, textarea, select { font: inherit; color: inherit; }
 .title-row { display: flex; align-items: flex-end; justify-content: space-between; margin: 12px 0 14px; gap: 12px; }
 .title { min-width: 0; }
 h1 {
-  margin: 0; font-size: 32px; line-height: 1.1; font-weight: 800; letter-spacing: -.03em;
+  margin: 0; font-size: 26px; line-height: 1.15; font-weight: 800; letter-spacing: -.025em;
   display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden;
 }
 .t-txt { overflow: hidden; text-overflow: ellipsis; }
@@ -163,7 +163,7 @@ h1 {
 .chips {
   position: sticky; top: 0; z-index: 5;
   display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
-  margin: 0 -16px; padding: 8px 16px 12px;
+  margin: 0 -16px; padding: 16px 16px 14px;
   background: var(--bg);
   max-width: 640px; margin-left: auto; margin-right: auto;
 }
@@ -553,7 +553,7 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 }
 
 /* icone Flaticon nel testo */
-.t-ico { display: inline-flex; font-size: 26px; color: color-mix(in srgb, var(--c) 75%, var(--text)); }
+.t-ico { display: inline-flex; font-size: 22px; color: color-mix(in srgb, var(--c) 75%, var(--text)); }
 .tag .li { font-size: 11px; }
 .target .li { font-size: 20px; color: color-mix(in srgb, var(--c) 70%, var(--text)); }
 .tips .ico, .muted .ico { font-size: 14px; vertical-align: -2px; }
