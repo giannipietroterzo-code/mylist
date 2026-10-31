@@ -445,11 +445,9 @@ function renderNotes() {
       <button class="${f === 'ideas' ? 'on' : ''}" data-f="ideas">${icon('bulb')}Idee <span>${nIdeas}</span></button>
     </div>` : '';
   const none = `<div class="empty small"><p>${f === 'ideas' ? 'Nessuna idea' : 'Nessun appunto'}: detta o scrivi qui sotto.</p></div>`;
-  const nt = data.trash.length;
-  const trash = nt ? `<button class="trash-link" id="openTrash">${icon('trash')}Eliminati di recente <span>${nt}</span></button>` : '';
   $('#main').innerHTML = (all.length
     ? `${seg}${notes.length ? `<ul class="items notes">${notes.map(noteHTML).join('')}</ul>` : none}`
-    : `<div class="empty"><div class="empty-emo">${icon('notes')}</div><h2>Nessun appunto</h2><p>Detta o scrivi qui sotto: idee, informazioni, cose da ricordare.<br>Da qualsiasi lista basta iniziare con <i>"prendi nota…"</i></p></div>`) + trash;
+    : `<div class="empty"><div class="empty-emo">${icon('notes')}</div><h2>Nessun appunto</h2><p>Detta o scrivi qui sotto: idee, informazioni, cose da ricordare.<br>Da qualsiasi lista basta iniziare con <i>"prendi nota…"</i></p></div>`);
   ui.fresh.clear();
 }
 
@@ -983,7 +981,7 @@ function editNote(id) {
   });
 }
 
-// ---------- Appunti eliminati: si recuperano per 60 giorni ----------
+// ---------- Appunti eliminati: si recuperano per 60 giorni (da Impostazioni) ----------
 function openTrash() {
   const left = (n) => Math.max(1, Math.ceil(TRASH_DAYS - (Date.now() - n.deletedAt) / 864e5));
   const ago = (n) => {
@@ -1006,11 +1004,12 @@ function openTrash() {
     $('#tEmpty', root).hidden = !list.length;
   };
   openSheet(`
-    <div class="sheet-head"><h2>Eliminati di recente</h2><button class="icon-btn" data-close aria-label="Chiudi">${icon('x')}</button></div>
+    <div class="sheet-head"><button class="icon-btn" id="tBack" aria-label="Indietro">${icon('back')}</button><h2>Note eliminate</h2><span></span></div>
     <p class="muted small">Gli appunti eliminati restano qui ${TRASH_DAYS} giorni, poi spariscono per sempre.</p>
     <div id="tList"></div>
     <button class="pill-btn wide danger ghost top-gap" id="tEmpty">${icon('trash')}Svuota il cestino</button>
   `, (root) => {
+    $('#tBack', root).onclick = openSettings;
     draw(root);
     $('#tList', root).addEventListener('click', (e) => {
       const b = e.target.closest('[data-restore]');
@@ -1022,14 +1021,15 @@ function openTrash() {
       saveData();
       buzz(8);
       toast(`Ripristinato: ${noteTitle(n)}`);
-      if (data.trash.length) { draw(root); render(); } else { closeSheet(); render(); }
+      draw(root);
+      render();
     });
     $('#tEmpty', root).onclick = () => {
       if (!confirm('Eliminare per sempre tutti gli appunti nel cestino? Non si può annullare.')) return;
       data.trash = [];
       saveData();
-      closeSheet();
       render();
+      openSettings();
     };
   });
 }
@@ -1384,6 +1384,11 @@ function openSettings() {
         <button class="pill-btn ghost danger" id="sReset">${icon('trash')}Azzera tutto</button>
       </div>
     </section>
+
+    <section class="card">
+      <h3>${icon('trash')}Note eliminate di recente</h3>
+      <button class="model-btn nav-btn" id="sTrash"><span><b>${data.trash.length ? (data.trash.length === 1 ? '1 nota nel cestino' : `${data.trash.length} note nel cestino`) : 'Cestino vuoto'}</b><small>Appunti e idee si recuperano per ${TRASH_DAYS} giorni</small></span>${icon('chevron')}</button>
+    </section>
     <p class="foot">MyList ${VERSION} · Icone <a href="https://www.flaticon.com/uicons" target="_blank" rel="noopener">UIcons by Flaticon</a></p>
   `, (root) => {
     const key = $('#sKey', root);
@@ -1426,6 +1431,7 @@ function openSettings() {
     bindChromeAI(root);
     $('#sChime', root).onclick = () => chime(settings.alertLevel !== 'normal' ? 3 : 1);
     $('#sExport', root).onclick = exportData;
+    $('#sTrash', root).onclick = openTrash;
     $('#sImport', root).onclick = () => $('#importFile').click();
     $('#sReset', root).onclick = () => {
       if (!confirm('Cancellare tutte le liste e le voci? Non si può annullare.')) return;
@@ -1692,7 +1698,6 @@ function bind() {
     if (e.target.closest('[data-note]') && li) return editNote(li.dataset.id);
     const nf = e.target.closest('#noteFilter [data-f]');
     if (nf) { ui.noteFilter = nf.dataset.f; buzz(5); return renderNotes(); }
-    if (e.target.closest('#openTrash')) return openTrash();
     const ans = e.target.closest('.answer[data-ref]');
     if (ans) {
       const [type, id] = ans.dataset.ref.split(':');
