@@ -649,3 +649,5 @@ button.answer:active { transform: scale(.99); }
 .switch:checked { background: var(--accent); }
 .switch:checked::after { transform: translateX(18px); }
 .switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.switch-row.locked { cursor: default; opacity: .75; }
+.switch:disabled { cursor: default; }

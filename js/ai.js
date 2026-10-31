@@ -1,8 +1,8 @@
 // Intelligenza artificiale di MyList: trasforma una frase libera in voci, appunti, ricerche.
 // Due motori:
 //  - OpenRouter, se c'è una chiave (modelli grandi, italiano ottimo)
-//  - l'IA integrata in Chrome (Gemini Nano, gratis e sul dispositivo), solo se l'utente la attiva:
-//    in quel caso risponde per prima e OpenRouter resta di riserva.
+//  - l'IA integrata in Chrome (Gemini Nano, gratis e sul dispositivo): se l'utente la attiva risponde
+//    per prima e OpenRouter resta di riserva; senza chiave OpenRouter si attiva da sola, se c'è.
 //    Oggi esiste solo su Chrome per computer con hardware adeguato; su Android non ancora.
 const API = 'https://openrouter.ai/api/v1';
 
@@ -27,7 +27,8 @@ export async function downloadChromeAI(onProgress) {
   chromeAI.state = 'available';
 }
 
-const chromeOn = (s) => !!s.chromeAI && chromeAI.state === 'available';
+export const chromeAuto = (s) => !hasKey(s) && chromeAI.state === 'available'; // accesa da sola: manca la chiave
+const chromeOn = (s) => (!!s.chromeAI || !hasKey(s)) && chromeAI.state === 'available';
 // Quale motore risponde per primo: 'chrome' | 'openrouter' | null
 export const aiSource = (s) => (s.aiMode === 'off' ? null : chromeOn(s) ? 'chrome' : hasKey(s) ? 'openrouter' : null);
 export const aiReady = (s) => !!aiSource(s);

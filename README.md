@@ -50,7 +50,7 @@ Per l'installazione e per il microfono serve **HTTPS**. Il modo più rapido, gra
 
 Se l'AI non risponde, la voce viene aggiunta comunque, così com'è, nella lista corrente.
 
-**IA di Chrome.** In Impostazioni → IA di Chrome vedi se il browser ce l'ha (presente, da scaricare, non utilizzabile, non presente), puoi scaricarla e provarla col pulsante *Prova l'IA di Chrome*. Con l'interruttore **Usala per prima** risponde lei (Gemini Nano, gratis e sul dispositivo) e OpenRouter resta di riserva se non ce la fa; da spenta non viene mai usata. Oggi esiste solo su Chrome per computer con hardware adeguato (Windows, macOS, Linux; tanta memoria e spazio libero). **Su Chrome per Android non è ancora disponibile.** L'italiano non è ancora tra le lingue ufficiali di Gemini Nano, quindi la qualità è inferiore a OpenRouter.
+**IA di Chrome.** In Impostazioni → IA di Chrome vedi se il browser ce l'ha (presente, da scaricare, non utilizzabile, non presente), puoi scaricarla e provarla col pulsante *Prova l'IA di Chrome*. Con l'interruttore **Usala per prima** risponde lei (Gemini Nano, gratis e sul dispositivo) e OpenRouter resta di riserva se non ce la fa. Senza chiave OpenRouter si attiva da sola, se il browser ce l'ha. Oggi esiste solo su Chrome per computer con hardware adeguato (Windows, macOS, Linux; tanta memoria e spazio libero). **Su Chrome per Android non è ancora disponibile.** L'italiano non è ancora tra le lingue ufficiali di Gemini Nano, quindi la qualità è inferiore a OpenRouter.
 
 **Privacy**: liste e chiave restano solo nel `localStorage` del telefono. All'AI vengono inviati solo la nota, i nomi delle liste e le ultime voci di ciascuna (per capire a cosa serve ogni lista).
 

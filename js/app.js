@@ -7,7 +7,7 @@ import { voiceSupported, listen } from './voice.js';
 
 const PAUSE_MS = { short: 900, normal: 1500, long: 2500 };
 const VERSION = window.MYLIST_VERSION || '';
-import { aiReady, aiSource, chromeAI, detectChromeAI, downloadChromeAI, organize, answer, makeTitle, testConnection, listModels } from './ai.js';
+import { aiReady, aiSource, chromeAI, chromeAuto, detectChromeAI, downloadChromeAI, organize, answer, makeTitle, testConnection, listModels } from './ai.js';
 import { dayKey, addDays, hhmm, parseWhen, remindAt, fromNow, dayFor, firstDue, advance, repeatLabel, sameRepeat } from './when.js';
 import { chime, primeSound } from './sound.js';
 import { initReminders, settle, notifySupported, notifyPermission, askNotify, newTopic, ntfyLink, sendTest } from './reminders.js';
@@ -1108,6 +1108,7 @@ function chromeAIBox() {
   const st = chromeAI.state;
   const line = (cls, ico, html) => `<p class="ai-status ${cls}">${icon(ico)}<span>${html}</span></p>`;
   if (st === 'available') {
+    if (chromeAuto(settings)) return line('ok', 'check', '<b>Presente e attiva</b> da sola, perché manca la chiave OpenRouter: gratis e sul dispositivo.');
     return line('ok', 'check', settings.chromeAI
       ? `<b>Presente e attiva</b>: risponde per prima, gratis e sul dispositivo.${settings.apiKey ? ' Se non ce la fa, passa a OpenRouter.' : ''}`
       : '<b>Presente</b> su questo dispositivo, ma spenta.');
@@ -1131,7 +1132,12 @@ function bindChromeAI(root) {
     refresh();
   });
   const on = $('#sChromeOn', root);
-  if (on) on.onchange = () => { settings.chromeAI = on.checked; saveSettings(); refresh(); };
+  // senza chiave è accesa per forza: l'interruttore lo mostra e non si tocca
+  const auto = chromeAuto(settings);
+  on.checked = auto || !!settings.chromeAI;
+  on.disabled = auto;
+  on.closest('.switch-row').classList.toggle('locked', auto);
+  on.onchange = () => { settings.chromeAI = on.checked; saveSettings(); refresh(); };
   const test = $('#sChromeTest', root);
   if (test) test.onclick = async () => {
     const st = $('#sChromeStatus', root);
