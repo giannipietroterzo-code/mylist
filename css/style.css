@@ -340,7 +340,7 @@ h1 {
   font-weight: 600; text-align: left;
 }
 .picker button span { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; background: color-mix(in srgb, var(--c) 20%, transparent); color: color-mix(in srgb, var(--c) 70%, var(--text)); font-size: 17px; }
-.picker button .ico { margin-left: auto; color: var(--c); font-size: 20px; }
+.picker button > .ico { margin-left: auto; color: var(--c); font-size: 20px; }
 .picker button.on, .picker button:active { background: var(--surface-2); }
 
 /* ---------- Toast ---------- */
