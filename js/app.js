@@ -313,6 +313,8 @@ async function smartAdd(text, { viaVoice = false } = {}) {
       if (looksDone(text)) return notFound(text, viaVoice);
       throw new Error('Nessuna voce trovata');
     }
+    // Il parser locale fa da rete di sicurezza: un avviso capito qui non si perde se il modello lo lascia vuoto
+    const local = res.items.length === 1 ? parseWhen(text) : null;
     const entries = res.items.map((r) => {
       let l = r.list ? findListByName(r.list) : null;
       if (!l && r.list) {
@@ -321,8 +323,9 @@ async function smartAdd(text, { viaVoice = false } = {}) {
       }
       // "tra 20 minuti" → orario esatto; orario senza giorno → oggi o domani; avviso senza orario → alle 9
       let { due, time } = r.in ? fromNow(r.in) : r;
-      let remind = r.remind;
+      let remind = r.in ? r.remind ?? 0 : r.remind; // "tra 2 minuti" ha sempre l'avviso, anche senza "ricordami"
       const repeat = r.in ? null : r.repeat;
+      if (remind == null && !repeat && local?.remind != null) ({ due, time, remind } = local);
       if (repeat) {
         if (repeat.every === 'week' && !repeat.days && due) repeat.days = [new Date(due + 'T12:00:00').getDay()];
         due = due || firstDue(repeat, time);
