@@ -84,12 +84,13 @@ const NOTE_HEAD = /^\s*(?:(?:ok|allora)[\s,]+)?(?:prendi(?:\s+un)?\s+(?:nota|app
 const IDEA_LABEL = /^\s*(?:(?:ok|allora)[\s,]+)?(?:ho\s+un['’]?\s*)?idea\b[\s,:.\-]*/iu;
 const IDEA_TONE = /^\s*(?:(?:ok|allora)[\s,]+)?(?:si\s+potrebbe(?:ro)?|potremmo|potrei|sarebbe\s+(?:bello|carino|utile|meglio|ora)|magari|e\s+se|mi\s+piacerebbe|ci\s+piacerebbe|perch[eé]\s+non)\b/iu;
 const cap = (t) => (t ? t[0].toUpperCase() + t.slice(1) : t);
-// null = non è un appunto
-function localNote(text, force = false) {
+// null = non è un appunto. tone = riconosci le idee anche dal tono ("magari…"): solo a voce,
+// perché quello che scrivi va nella lista scelta nel box (contano solo "idea:", "prendi nota…")
+function localNote(text, force = false, tone = true) {
   const t = text.trim();
   // "idea per il regalo di Anna: …" → tolgo "idea"; "si potrebbe…" resta com'è, è l'idea stessa
   if (IDEA_LABEL.test(t)) return { title: '', text: cap(t.replace(IDEA_LABEL, '').trim()) || cap(t), idea: true };
-  if (IDEA_TONE.test(t)) return { title: '', text: cap(t), idea: true };
+  if (tone && IDEA_TONE.test(t)) return { title: '', text: cap(t), idea: true };
   if (!force && !NOTE_HEAD.test(t)) return null;
   return { title: '', text: cap(t.replace(NOTE_HEAD, '').trim()) || cap(t), idea: false };
 }
@@ -283,7 +284,7 @@ async function smartAdd(text, { viaVoice = false } = {}) {
   if (!useAI || /\s?#[\p{L}]/u.test(text)) {
     const sq = /#/.test(text) ? null : localSearch(text);
     if (sq) return startSearch(sq, null, { viaVoice });
-    const note = /#/.test(text) ? null : localNote(text, inNotes());
+    const note = /#/.test(text) ? null : localNote(text, inNotes(), viaVoice);
     if (note) return addItems([], { notes: [note], reveal: viaVoice });
     const done = /#/.test(text) ? null : findDoneLocally(text);
     if (done?.length) addItems([], { done, reveal: viaVoice });
@@ -942,7 +943,8 @@ function editNote(id) {
       <button class="pill-btn ghost" id="nCopy">${icon('copy')}Copia</button>
       ${navigator.share ? `<button class="pill-btn ghost" id="nShare">${icon('share')}Condividi</button>` : ''}
     </div>
-    <button class="link-btn top-gap" id="nToItem">${icon('check')}È una cosa da fare: spostalo in ${esc(targetList().name)}</button>
+    <label class="lbl">È una cosa da fare? Tocca la lista dove spostarla</label>
+    <div class="list-pick" id="nToList">${data.lists.map((l) => `<button class="chip" data-id="${l.id}" style="${cv(l.color)}">${listIcon(l, 'chip-emo')}${esc(l.name)}</button>`).join('')}</div>
     <div class="row top-gap">
       <button class="pill-btn danger ghost grow" id="nDel">${icon('trash')}Elimina</button>
       <button class="pill-btn grow" data-close>Fatto</button>
@@ -969,15 +971,18 @@ function editNote(id) {
       try { await navigator.clipboard.writeText(full()); toast('Copiato'); } catch (err) { toast('Copia non riuscita'); }
     };
     $('#nShare', root)?.addEventListener('click', () => navigator.share({ title: n.title || 'Appunto', text: full() }).catch(() => {}));
-    $('#nToItem', root).onclick = () => {
+    // Nota o idea → voce della lista toccata: esce da Note e Idee (resti qui, per sistemarne altre di fila)
+    $('#nToList', root).onclick = (e) => {
+      const l = listById(e.target.closest('[data-id]')?.dataset.id);
+      if (!l) return;
       const now = Date.now();
       data.notes = data.notes.filter((x) => x.id !== id);
-      data.items.push({ id: n.id, text: n.text.replace(/\s*\n+\s*/g, ' ').trim() || n.title, listId: targetList().id, done: false, due: null, createdAt: now });
+      data.items.push({ id: n.id, text: n.text.replace(/\s*\n+\s*/g, ' ').trim() || n.title, listId: l.id, done: false, due: null, createdAt: now });
       ui.fresh.add(n.id);
       saveData();
       closeSheet();
       render();
-      toast(`Spostato in ${targetList().name}`, 'Annulla', () => { restore(); render(); });
+      toast(`Spostata in ${l.name}`, 'Annulla', () => { restore(); render(); });
     };
     $('#nDel', root).onclick = () => {
       closeSheet();
@@ -1321,7 +1326,7 @@ function openSettings() {
 
       <label class="lbl">Quando usarlo</label>
       ${seg('aiMode', settings.aiMode, [['always', 'Sempre'], ['voice', 'Solo dettatura'], ['off', 'Mai']])}
-      <p class="muted small">L'AI capisce la nota e dove vuoi metterla ("mettilo nel lavoro", "per casa"…). Se non lo dici, sceglie lei la lista più adatta.</p>
+      <p class="muted small">L'AI capisce la nota e dove vuoi metterla ("mettilo nel lavoro", "per casa"…). Se non lo dici, sceglie lei la lista più adatta. Con <b>Solo dettatura</b> quello che scrivi va dritto nella lista scelta nel box.</p>
 
       <button class="pill-btn wide ghost top-gap" id="sTest" ${settings.apiKey ? '' : 'disabled'}>${icon('bolt')}Prova OpenRouter</button>
       <p class="status small" id="sStatus"></p>

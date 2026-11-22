@@ -50,7 +50,7 @@ function defaultData() {
 export const DEFAULT_SETTINGS = {
   apiKey: '',
   model: 'openrouter/auto',
-  aiMode: 'always', // always | voice | off
+  aiMode: 'voice', // always | voice (solo la dettatura) | off
   theme: 'auto', // auto | light | medium | medium2 | medium3 | dark
   lang: 'it-IT',
   pause: 'normal', // short | normal | long: silenzio prima dell'invio automatico
@@ -80,6 +80,11 @@ if (/:batch$/.test(settings.model)) settings.model = settings.model.replace(/:ba
 if ((settings.sv || 1) < 2) {
   if (settings.aiMode === 'voice') settings.aiMode = 'always';
   settings.sv = 2;
+}
+// v3: l'AI smista solo quello che detti; quello che scrivi va nella lista scelta nel box
+if (settings.sv < 3) {
+  if (settings.aiMode === 'always') settings.aiMode = 'voice';
+  settings.sv = 3;
 }
 try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch (e) {}
 
