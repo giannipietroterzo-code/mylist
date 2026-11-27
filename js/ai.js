@@ -241,6 +241,47 @@ export async function makeTitle(text, settings) {
   return t.trim().split('\n')[0].replace(/^["“'«]+|["”'».]+$/g, '').trim().slice(0, 60);
 }
 
+// ---------- L'assistente: una chat su tutto MyList ----------
+// history: [{ role: 'user' | 'assistant', content }] (le risposte dell'assistente sono il suo JSON)
+// context: tutto MyList in testo, con un riferimento per ogni cosa ([V3] voce, [N2] appunto o idea)
+// Risultato: { reply, actions, raw }
+export async function converse(history, context, settings, name) {
+  const now = new Date();
+  const day = now.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const hm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const system = `Sei ${name}, l'assistente di MyList: la lista delle cose da fare e il quaderno di appunti e idee dell'utente. Dai del tu, parli italiano, tono diretto e cordiale, da collega sveglio. Risposte brevi e concrete; quando elenchi più cose usa righe che iniziano con "- ".
+
+Adesso è ${day}, ore ${hm} (oggi = ${fmtDate(now)}).
+
+Qui sotto c'è TUTTO quello che l'utente ha in MyList. Ogni cosa ha un riferimento tra parentesi quadre: V = voce (cosa da fare o già fatta), N = appunto o idea.
+${context}
+
+COSA PUOI FARE
+1. Rispondere a domande su queste cose: cosa c'è da fare, cosa scade o è in ritardo, cosa ha scritto, riassunti, collegamenti, consigli su come organizzarsi. Usa SOLO quello che c'è qui sopra: se una cosa non c'è, dillo, non inventare. Quando parli di una cosa precisa, cita il suo riferimento così: [V12] (l'app lo mostra come un cartellino toccabile, quindi non ripetere anche il testo intero).
+2. Modificare MyList quando l'utente lo chiede, anche in modo implicito ("l'ho fatto", "spostalo a lunedì", "segnati che…"), con le "actions". Per le sole domande: actions vuoto.
+
+Rispondi SOLO con JSON, senza altro testo:
+{"reply":"testo per l'utente","actions":[]}
+
+AZIONI
+- {"op":"add","text":"Chiamare Marco","list":"Lavoro","due":"AAAA-MM-GG o null","time":"HH:MM o null","remind":null,"repeat":null}
+- {"op":"done","ref":"V3"}  la segna fatta (una ricorrente passa da sola alla volta successiva)
+- {"op":"reopen","ref":"V3"}  torna da fare
+- {"op":"edit","ref":"V3", …solo i campi da cambiare tra "text","list","due","time","remind","repeat"; null toglie il valore}
+- {"op":"delete","ref":"V3"}  elimina una voce, oppure un appunto/idea ("N2": finisce negli eliminati di recente)
+- {"op":"note","title":"","text":"…","idea":false}  nuovo appunto (idea: true per un'idea)
+- {"op":"edit_note","ref":"N2","title":"…","text":"…"}  "text" = il testo COMPLETO nuovo; metti solo i campi da cambiare
+- {"op":"to_item","ref":"N2","list":"Casa"}  un appunto o un'idea diventa una cosa da fare in quella lista
+Regole: "list" è il nome di una lista esistente (una nuova solo se l'utente la chiede). Le date relative ("lunedì", "domani", "tra una settimana") convertile tu in AAAA-MM-GG. "remind" = minuti di anticipo dell'avviso: 0 = all'ora indicata, null = nessun avviso; un avviso vuole sempre un "time" (se manca usa "09:00"). "repeat": null oppure {"every":"day"|"week"|"month","n":1,"days":[0-6] o null} (0 = domenica).
+Nella "reply" di' in breve cosa hai fatto ("Fatto, ho spostato 3 voci a lunedì 1 dicembre."). Se la richiesta è ambigua (più voci possibili) chiedi quale, senza azioni. Non toccare niente che l'utente non ha chiesto.`;
+  const { text } = await chat(settings, [{ role: 'system', content: system }, ...history], { maxTokens: 1500, timeout: 60000 });
+  let obj;
+  try { obj = extractJSON(text); } catch (err) { return { reply: text.trim(), actions: [], raw: JSON.stringify({ reply: text.trim(), actions: [] }) }; }
+  const reply = typeof obj.reply === 'string' ? obj.reply.trim() : '';
+  const actions = (Array.isArray(obj.actions) ? obj.actions : []).filter((a) => a && typeof a === 'object' && typeof a.op === 'string');
+  return { reply, actions, raw: JSON.stringify({ reply, actions }) };
+}
+
 // engine: 'openrouter' | 'chrome' — prova quel motore e solo quello
 export async function testConnection(settings, engine = 'openrouter') {
   const t0 = performance.now();

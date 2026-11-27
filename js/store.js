@@ -61,6 +61,9 @@ export const DEFAULT_SETTINGS = {
   ntfyTopic: '', // canale ntfy per gli avvisi ad app chiusa ('' = spento)
   alertLevel: 'loud', // loud | normal: quanto si fanno sentire i promemoria
   chromeAI: false, // IA di Chrome attivata: risponde prima di OpenRouter
+  aiName: '', // nome dell'assistente della chat ('' = Lisa)
+  talkRate: 1.1, // velocità della voce dell'assistente
+  talkVoice: '', // voce del dispositivo scelta per l'assistente ('' = la prima in italiano)
 };
 
 function read(key, fallback) {

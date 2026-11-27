@@ -11,6 +11,7 @@ import { aiReady, aiSource, chromeAI, chromeAuto, detectChromeAI, downloadChrome
 import { dayKey, addDays, hhmm, parseWhen, remindAt, fromNow, dayFor, firstDue, advance, repeatLabel, sameRepeat } from './when.js';
 import { chime, primeSound } from './sound.js';
 import { initReminders, settle, notifySupported, notifyPermission, askNotify, newTopic, ntfyLink, sendTest } from './reminders.js';
+import { initChat, openChat, calledAssistant, aiName, DEFAULT_NAME } from './chat.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -279,6 +280,9 @@ function todoForAI() {
 
 // Usa l'AI per smistare, con fallback automatico al parser locale
 async function smartAdd(text, { viaVoice = false } = {}) {
+  // "Lisa, cosa devo fare oggi?": chiamato per nome (scritto o detto) risponde l'assistente, in chat
+  const asked = calledAssistant(text);
+  if (asked != null) return openChat(asked, { viaVoice });
   const useAI = aiReady(settings) && (settings.aiMode === 'always' || (settings.aiMode === 'voice' && viaVoice));
   // Se l'utente ha usato #lista esplicitamente, non serve l'AI
   if (!useAI || /\s?#[\p{L}]/u.test(text)) {
@@ -1328,6 +1332,10 @@ function openSettings() {
       ${seg('aiMode', settings.aiMode, [['always', 'Sempre'], ['voice', 'Solo dettatura'], ['off', 'Mai']])}
       <p class="muted small">L'AI capisce la nota e dove vuoi metterla ("mettilo nel lavoro", "per casa"…). Se non lo dici, sceglie lei la lista più adatta. Con <b>Solo dettatura</b> quello che scrivi va dritto nella lista scelta nel box.</p>
 
+      <label class="lbl">Il nome del tuo assistente</label>
+      <input id="sAiName" class="field" value="${esc(aiName())}" placeholder="${DEFAULT_NAME}" maxlength="20" autocomplete="off" spellcheck="false">
+      <p class="muted small">Inizia una frase col suo nome, scritta o detta (<i>"${esc(aiName())}, cosa devo fare oggi?"</i>), oppure tocca ${icon('sparkles')} in alto: si apre a voce, a mani libere. Tenendolo premuto si apre la chat scritta. Conosce tutto MyList, risponde e fa le modifiche che chiedi.</p>
+
       <button class="pill-btn wide ghost top-gap" id="sTest" ${settings.apiKey ? '' : 'disabled'}>${icon('bolt')}Prova OpenRouter</button>
       <p class="status small" id="sStatus"></p>
     </section>
@@ -1426,6 +1434,10 @@ function openSettings() {
       bindChromeAI(root);
     });
     $('#sKeyShow', root).onclick = () => { key.type = key.type === 'password' ? 'text' : 'password'; };
+    $('#sAiName', root).addEventListener('input', (e) => {
+      settings.aiName = e.target.value.replace(/[^\p{L}\p{N}' -]/gu, '').trim();
+      saveSettings();
+    });
     $('#sModel', root).onclick = () => openModelPicker();
     root.querySelectorAll('[data-seg]').forEach((s) => s.addEventListener('click', (e) => {
       const b = e.target.closest('[data-v]');
@@ -1585,7 +1597,7 @@ function startVoice() {
   $('#voiceText').textContent = '';
   $('#voiceOrbIco').innerHTML = icon('mic');
   $('#voiceTarget').innerHTML = inNotes() ? (ideaMode() ? `${icon('bulb')} Detta la tua idea` : `${icon('notes')} Detta il tuo appunto`) : aiReady(settings) && settings.aiMode !== 'off'
-    ? `${icon('sparkles')} L'AI smisterà nelle liste giuste`
+    ? `${icon('sparkles')} Smisto io nelle liste · "${esc(aiName())}, …" per chiedere`
     : `Finisce in <b>${listIcon(t)} ${esc(t.name)}</b>`;
   buzz(20);
 
@@ -1689,6 +1701,16 @@ function bind() {
   $('#btnLists').onclick = manageLists;
 
   $('#btnSettings').onclick = openSettings;
+  $('#btnAsk').innerHTML = icon('sparkles');
+  // un tocco apre Lisa a voce, già in ascolto; tenuto premuto apre la chat scritta
+  {
+    const ask = $('#btnAsk');
+    let hold = 0, held = false;
+    ask.addEventListener('pointerdown', () => { held = false; hold = setTimeout(() => { held = true; navigator.vibrate?.(12); openChat(); }, 450); });
+    for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) ask.addEventListener(ev, () => clearTimeout(hold));
+    ask.addEventListener('contextmenu', (e) => e.preventDefault());
+    ask.onclick = () => { if (!held) openChat('', { viaVoice: true }); held = false; };
+  }
   $('#btnEditList').onclick = () => editList(settings.view);
   $('#btnGroup').onclick = () => { settings.grouped = !settings.grouped; saveSettings(); render(); };
   // la ricerca si apre a voce o scrivendo "cerca…"; qui si può affinare o chiudere
@@ -1824,6 +1846,8 @@ detectChromeAI().then((st) => { if (st !== 'none') render(); });
 // Appunti senza titolo (salvati senza AI o prima di questa versione): l'AI glielo scrive con calma
 setTimeout(() => data.notes.filter((n) => !n.titleFor && !n.userTitle).slice(0, 20).forEach(autoTitle), 2500);
 primeSound();
+// La chat con l'assistente: le serve sapere come l'app completa, apre e disegna le cose
+initChat({ render, listOf, complete, dueLabel, toast, editItem, editNote, speak, cv, esc, autoTitle, openSettings, targetList, ui });
 initReminders({
   fire: (it, late) => {
     const loud = settings.alertLevel !== 'normal';

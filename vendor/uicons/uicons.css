@@ -19,6 +19,7 @@ i[class^=fi-rr-]:before,i[class*=" fi-rr-"]:before{font-family:uicons-regular-ro
 .fi-rr-clipboard-list:before{content:"\f43b"}
 .fi-rr-clock:before{content:"\f45a"}
 .fi-rr-coffee:before{content:"\f48f"}
+.fi-rr-comments:before{content:"\f4bc"}
 .fi-rr-copy:before{content:"\f4dd"}
 .fi-rr-cross-small:before{content:"\f4f6"}
 .fi-rr-download:before{content:"\f591"}
@@ -63,3 +64,5 @@ i[class^=fi-rr-]:before,i[class*=" fi-rr-"]:before{font-family:uicons-regular-ro
 .fi-rr-upload:before{content:"\fe75"}
 .fi-rr-users:before{content:"\fea6"}
 .fi-rr-utensils:before{content:"\fea8"}
+.fi-rr-volume:before{content:"\fed0"}
+.fi-rr-waveform-path:before{content:"\fef0"}

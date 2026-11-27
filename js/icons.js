@@ -33,6 +33,9 @@ const MAP = {
   copy: 'copy',
   share: 'share',
   restore: 'undo',
+  talk: 'waveform-path',
+  comments: 'comments',
+  volume: 'volume',
 };
 
 export function icon(name, cls = '') {

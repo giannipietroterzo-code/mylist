@@ -34,6 +34,7 @@
           <span class="ver" id="brandVer"></span>
         </div>
         <div class="top-actions">
+          <button class="icon-btn ask" id="btnAsk" aria-label="Chiedi all'assistente"></button>
           <button class="icon-btn" id="btnSettings" aria-label="Impostazioni"></button>
         </div>
       </div>
@@ -87,6 +88,46 @@
       <button class="pill-btn" id="voiceDone">Invia ora</button>
     </div>
   </div>
+
+  <!-- Chat con l'assistente (js/chat.js) -->
+  <dialog class="chat" id="chat" aria-labelledby="chatName">
+    <header class="chat-head">
+      <span class="chat-avatar" id="chatAvatar" aria-hidden="true"></span>
+      <div class="chat-who"><b id="chatName">Lisa</b><small>Conosce tutto quello che hai in MyList</small></div>
+      <button class="pill-btn ghost chat-new chat-talk" id="chatTalk" hidden></button>
+      <button class="pill-btn ghost chat-new" id="chatNew" hidden>Nuova chat</button>
+      <button class="icon-btn" id="chatClose" aria-label="Chiudi"></button>
+    </header>
+    <div class="chat-msgs" id="chatMsgs" aria-live="polite"></div>
+    <form class="chat-bar" id="chatForm" autocomplete="off">
+      <button type="button" class="chat-mic" id="chatMic" aria-label="Detta"></button>
+      <input id="chatInput" type="text" placeholder="Chiedi…" enterkeyhint="send" autocapitalize="sentences">
+      <button type="submit" class="go" id="chatSend" aria-label="Invia"></button>
+    </form>
+
+    <!-- A voce, a mani libere (js/talk.js): il nucleo ascolta, pensa e parla -->
+    <div class="talk" id="talk" hidden>
+      <header class="talk-head">
+        <div class="chat-who"><b id="talkName">Lisa</b><small id="talkSub">a voce</small></div>
+        <button class="talk-pill" id="talkConv" aria-label="Conversazione scritta"></button>
+        <button class="talk-pill" id="talkVoice" aria-label="Voce: tocca per cambiare" hidden></button>
+        <button class="talk-pill" id="talkRate" aria-label="Velocità: tocca per cambiare"></button>
+        <button class="icon-btn" id="talkClose" aria-label="Chiudi"></button>
+      </header>
+      <div class="talk-scene" id="talkScene">
+        <button class="talk-core" id="talkCore" aria-label="Tocca per parlare, o per interrompere"><canvas></canvas></button>
+        <b class="talk-label" id="talkLabel"></b>
+        <p class="talk-you" id="talkYou"></p>
+        <div class="talk-says" id="talkSays" aria-live="polite"></div>
+        <div class="talk-changes" id="talkChanges"></div>
+      </div>
+      <small class="talk-note" id="talkNote"></small>
+      <form class="chat-bar talk-bar" id="talkForm" autocomplete="off">
+        <input id="talkInput" type="text" placeholder="…oppure scrivimi" enterkeyhint="send" autocapitalize="sentences">
+        <button type="submit" class="go" id="talkSend" aria-label="Invia"></button>
+      </form>
+    </div>
+  </dialog>
 
   <!-- Bottom sheet generico -->
   <dialog class="sheet" id="sheet">

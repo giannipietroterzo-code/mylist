@@ -47,13 +47,42 @@ Per l'installazione e per il microfono serve **HTTPS**. Il modo più rapido, gra
 2. In MyList: ⚙️ **Impostazioni → Smistamento intelligente** → incolla la chiave.
 3. **Modello**: tocca il campo e scegli tra i consigliati (Auto, Claude Haiku, GPT Luna, Gemini Flash Lite, DeepSeek Flash). L'elenco prende da OpenRouter la versione più recente di ogni famiglia e mostra il costo stimato al mese con circa 20 dettature al giorno: qualche decina di centesimi.
 4. **Prova connessione** per verificare.
-5. **Quando usarlo**: *Sempre* (default: testo scritto e dettato), *Solo dettatura* o *Mai*. Scrivere `#lista` salta l'AI e va dritto in quella lista.
+5. **Quando usarlo**: *Solo dettatura* (default: quello che scrivi va dritto nella lista scelta nel box), *Sempre* (anche il testo scritto) o *Mai*. Scrivere `#lista` salta l'AI e va dritto in quella lista.
 
 Se l'AI non risponde, la voce viene aggiunta comunque, così com'è, nella lista corrente.
 
 **IA di Chrome.** In Impostazioni → IA di Chrome vedi se il browser ce l'ha (presente, da scaricare, non utilizzabile, non presente), puoi scaricarla e provarla col pulsante *Prova l'IA di Chrome*. Con l'interruttore **Usala per prima** risponde lei (Gemini Nano, gratis e sul dispositivo) e OpenRouter resta di riserva se non ce la fa. Senza chiave OpenRouter si attiva da sola, se il browser ce l'ha. Oggi esiste solo su Chrome per computer con hardware adeguato (Windows, macOS, Linux; tanta memoria e spazio libero). **Su Chrome per Android non è ancora disponibile.** L'italiano non è ancora tra le lingue ufficiali di Gemini Nano, quindi la qualità è inferiore a OpenRouter.
 
 **Privacy**: liste e chiave restano solo nel `localStorage` del telefono. All'AI vengono inviati solo la nota, i nomi delle liste e le ultime voci di ciascuna (per capire a cosa serve ogni lista).
+
+## Chiedi a Lisa (la chat)
+
+Un assistente che conosce **tutto** quello che c'è in MyList: liste, voci (anche quelle fatte negli ultimi 30 giorni), appunti e idee. Si apre:
+- toccando ✨ in alto: si apre a voce, già in ascolto (tenendolo premuto, la chat scritta);
+- iniziando una frase col suo nome, scritta o dettata, da qualsiasi punto dell'app: *"Lisa, cosa devo fare oggi?"*, *"ehi Lisa, sposta il dentista a giovedì"*.
+
+Il nome si cambia in Impostazioni → Smistamento intelligente → *Il nome del tuo assistente*.
+
+**Cosa fa**
+- **Risponde**: cosa c'è da fare, cosa è in ritardo o scade, cosa avevi scritto, riassunti delle idee. Le cose che cita diventano cartellini colorati: toccandoli si aprono.
+- **Modifica**: aggiunge voci (con data, orario, avviso, ripetizione), le segna fatte, le sposta, le cambia, le elimina; crea e riscrive appunti e idee, trasforma un appunto in una cosa da fare.
+  - **Fino a 3 modifiche, senza eliminazioni**: le fa subito; sotto la risposta compare cosa è cambiato, con **Annulla**.
+  - **Più di 3, o se elimina qualcosa**: prima mostra l'anteprima, con **Applica** / **Scarta**.
+  - L'Annulla vale finché l'app resta aperta e finché non cambi altro nel frattempo (altrimenti cancellerebbe anche quello).
+- Ricorda la conversazione (ultime 60 battute) finché non tocchi **Nuova chat**.
+
+**A voce, a mani libere** (come Mino in MyMind). È il modo di base: si apre toccando ✨, col pulsante **A voce** in testa alla chat o col microfono nella sua barra, e anche quando la chiami per nome dettando nel box. Al centro c'è il nucleo: il logo di MyList con intorno cinque linee sottili e morbide, gialle, che si intrecciano e si deformano piano.
+- **ascolta**: le barre del logo e le linee seguono la voce; una linea punteggiata intorno si accorcia col tempo che resta prima che consideri finita la frase (2 secondi di silenzio, di più se resta in sospeso: *"compra il latte e…"*). «Ti ascolto» compare solo quando il microfono è davvero aperto;
+- **pensa**: la spunta si ridisegna e le linee si stringono e girano svelte;
+- **parla**: la spunta si accende e barre e linee pulsano. Legge una frase alla volta, e le voci di un elenco una per riga. Poi il microfono si riapre da solo; se non dici niente torna a riposo.
+- Toccando il nucleo parli, la interrompi, o mandi subito quello che hai detto.
+- Le modifiche si confermano a voce: dopo un'anteprima chiede *"Confermi?"* e basta dire **sì** o **no** (*"no, mettilo giovedì"* scarta e richiede). **Annulla** annulla l'ultima modifica, **basta** la mette a riposo.
+- Nella riga in fondo puoi anche scriverle: allora risponde per iscritto. **Conversazione** torna alla chat scritta, con cartellini e Annulla.
+- In testata si cambiano la voce (quelle italiane del telefono) e la velocità; toccandole senti una frase di prova.
+- Se l'app va in sottofondo, microfono e voce si fermano; una risposta in arrivo resta scritta.
+- Ascolto e voce sono quelli di Chrome (Web Speech): sul telefono le parole possono passare dai server Google, come nella dettatura.
+
+**Serve l'IA via OpenRouter**: l'IA di Chrome è troppo piccola per tenere in testa tutto MyList, e su Android non c'è. **Privacy**: a ogni domanda tutto il contenuto di MyList (anche appunti e idee) va al modello scelto, tramite OpenRouter. Costo: dipende dal modello, di solito frazioni di centesimo a domanda.
 
 ## Promemoria
 
@@ -79,7 +108,9 @@ js/version.js           numero di versione (unico punto da cambiare)
 js/app.js               UI, gesti, sheet, impostazioni
 js/store.js             dati e salvataggio locale
 js/voice.js             dettatura (Web Speech API)
-js/ai.js                OpenRouter: smistamento, test, elenco modelli
+js/ai.js                OpenRouter: smistamento, chat dell'assistente, test, elenco modelli
+js/chat.js              la chat con l'assistente (Lisa): contesto, cartellini, modifiche con Annulla / Applica
+js/talk.js              la chat a voce a mani libere: il nucleo che ascolta, pensa e parla
 js/when.js              date, orari e promemoria senza AI ("alle 16", "tra 20 minuti", "mezz'ora prima")
 js/reminders.js         avvisi: notifiche locali + programmazione su ntfy
 js/sound.js             din-don dei promemoria con l'app aperta (sintetizzato, nessun file)
