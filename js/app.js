@@ -13,6 +13,7 @@ import { dayKey, addDays, hhmm, parseWhen, remindAt, fromNow, dayFor, firstDue, 
 import { chime, primeSound } from './sound.js';
 import { initReminders, settle, notifySupported, notifyPermission, askNotify } from './reminders.js';
 import { initChat, openChat, calledAssistant, aiName, DEFAULT_NAME } from './chat.js';
+import { chosenVoice } from './talk.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -537,6 +538,10 @@ function speak(text) {
   try {
     const u = new SpeechSynthesisUtterance(text);
     u.lang = settings.lang;
+    // la stessa voce di Lisa (scelta nella schermata a voce)
+    const v = chosenVoice();
+    if (v) u.voice = v;
+    u.rate = settings.talkRate || 1.1;
     speechSynthesis.cancel();
     speechSynthesis.speak(u);
   } catch (err) { /* sintesi vocale non disponibile */ }

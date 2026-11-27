@@ -238,10 +238,18 @@ function voices() {
   const lang = (settings.lang || 'it-IT').slice(0, 2);
   return (window.speechSynthesis?.getVoices() || []).filter((v) => v.lang.replace('_', '-').toLowerCase().startsWith(lang));
 }
-const voiceName = (v) => v.name.replace(/^(Google|Microsoft|Apple)\s+/i, '').replace(/\s*\(.*\)\s*$/, '').replace(/\s+-\s+.*$/, '').trim() || v.name;
-function chosenVoice() {
+// le voci di Google su Android si chiamano it-it-x-itb-network: diventano "Voce B · online"
+function voiceName(v) {
+  const g = v.name.match(/^[a-z]{2}-[a-z]{2}-x-[a-z]{2}([a-z])-(local|network)$/i);
+  if (g) return `Voce ${g[1].toUpperCase()}${g[2] === 'network' ? ' · online' : ''}`;
+  return v.name.replace(/^(Google|Microsoft|Apple)\s+/i, '').replace(/\s*\(.*\)\s*$/, '').replace(/\s+-\s+.*$/, '').trim() || v.name;
+}
+// la voce di partenza: le femminili di Google (b, c), meglio quelle online (più naturali), poi le altre
+const VOICE_PREF = [/-x-itb-network$/i, /-x-itc-network$/i, /-x-itb-local$/i, /-x-itc-local$/i, /network$/i, /google/i];
+export function chosenVoice() {
   const vs = voices();
-  return vs.find((v) => v.name === settings.talkVoice) || vs.find((v) => /google/i.test(v.name)) || vs[0] || null;
+  const pref = VOICE_PREF.map((re) => vs.find((v) => re.test(v.name))).find(Boolean);
+  return vs.find((v) => v.name === settings.talkVoice) || pref || vs[0] || null;
 }
 
 function say(text, g, thenListen = true) {

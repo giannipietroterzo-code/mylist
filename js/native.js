@@ -128,7 +128,8 @@ if (native) {
     window.SpeechSynthesisUtterance = NativeUtterance;
     Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true });
     TTS.getSupportedVoices().then(({ voices }) => {
-      synth._voices = (voices || []).map((v, i) => ({ name: v.name, lang: v.lang, voiceURI: v.voiceURI, localService: v.localService, default: v.default, _index: i }));
+      // il plugin chiama tutte le voci "italiano Italia": il nome vero e unico è voiceURI (es. it-it-x-itb-network)
+      synth._voices = (voices || []).map((v, i) => ({ name: v.voiceURI || v.name, lang: v.lang, voiceURI: v.voiceURI, localService: v.localService, default: v.default, _index: i }));
       synth._listeners.forEach((f) => f());
     }).catch(() => {});
   }
