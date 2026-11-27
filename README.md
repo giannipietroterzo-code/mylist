@@ -44,7 +44,7 @@ Per l'installazione e per il microfono serve **HTTPS**. Il modo più rapido, gra
 ## L'app Android vera
 
 Oltre al sito c'è un APK, la stessa app impacchettata con Capacitor (cartella `app/`). In più del sito ha:
-- **promemoria nativi**: suonano all'ora esatta anche ad app chiusa e dopo un riavvio, fino a 14 giorni avanti, con **Fatto** e **+10 min** sulla notifica; ntfy non serve e il testo non esce dal telefono;
+- **promemoria nativi**: suonano all'ora esatta anche ad app chiusa e dopo un riavvio, fino a 14 giorni avanti, con **Fatto** e **+10 min** sulla notifica, anche insistenti; il testo non esce dal telefono;
 - **dettatura e voce di Android** al posto di quelle di Chrome (che nella WebView non ci sono);
 - il **tasto indietro** che chiude quello che è aperto.
 
@@ -101,18 +101,14 @@ Il nome si cambia in Impostazioni → Smistamento intelligente → *Il nome del 
 
 ## Promemoria
 
-Un'app web non può svegliarsi da sola a telefono in tasca, quindi ci sono due canali:
+- **Nell'app Android** gli avvisi sono notifiche native: suonano all'ora esatta anche ad app chiusa e dopo un riavvio, programmate fino a 14 giorni avanti. Il testo non esce dal telefono. Sulla notifica ci sono **Fatto** (spunta la voce, o la passa alla volta dopo se è ricorrente) e **+10 min**.
+- **Sul sito** sono notifiche del browser: arrivano solo con MyList aperta o in background da poco, perché un'app web non può svegliarsi da sola. All'apertura ti mostra comunque gli avvisi persi.
 
-1. **Notifiche di MyList** (Impostazioni → Promemoria → *Attiva notifiche*): arrivano se l'app è aperta o in background da poco. All'apertura ti mostra comunque gli avvisi persi.
-2. **Avvisi sicuri con ntfy** (consigliato): installa l'app gratuita [ntfy](https://play.google.com/store/apps/details?id=io.heckel.ntfy), poi in Impostazioni → Promemoria scegli *Con ntfy*, tocca **Collega** e **Prova**. MyList programma ogni avviso sul server ntfy.sh, che lo consegna all'ora giusta anche con MyList chiusa. Completare, eliminare o spostare una voce annulla o aggiorna il suo avviso. ntfy.sh accetta avvisi fino a 3 giorni avanti: quelli più lontani vengono programmati alle aperture successive. Il canale ha un nome casuale; il testo del promemoria passa dal server ntfy.sh. In ntfy attiva la *consegna istantanea* per evitare ritardi.
+**Avvisi insistenti**: *"bonifico, ricordamelo ogni ora finché non l'ho fatto"*, *"chiamare Marco ogni mezz'ora finché non risponde"*, *"pagare la bolletta, insisti"*. Dopo il primo avviso ne arriva un altro ogni ora (o ogni quanto hai detto) finché non tocchi **Fatto**. Senza un momento, il primo arriva dopo il primo intervallo. Si capiscono scritti, dettati, dall'IA e da Lisa; nell'editor della voce c'è la riga **Insisti finché non è fatta** (una volta, ogni 15 min, ogni mezz'ora, ogni ora, ogni 2 ore). Nella lista la voce ha un'etichetta gialla «ogni ora». Nell'app Android se ne programmano 24 in anticipo per volta; le altre alle aperture successive.
 
-Sulla notifica di ntfy ci sono due tasti che funzionano **senza aprire MyList**:
-- **Fatto**: lascia un messaggio nel canale privato `<canale>-fatto`; MyList lo legge quando la riapri (entro 12 ore, quanto ntfy.sh conserva i messaggi) e spunta la voce, o la passa alla volta successiva se è ricorrente.
-- **+10 min**: il telefono riprogramma l'avviso su ntfy da solo (fino a 3 rinvii).
+**Suono**: in Impostazioni → Promemoria scegli *Forte* (con l'app aperta un din-don ripetuto tre volte e una vibrazione lunga) o *Normale*. Nell'app Android la suoneria della notifica si cambia da Impostazioni Android → App → MyList → Notifiche → Promemoria.
 
-**Suono**: in Impostazioni → Promemoria scegli *Forte* (default: priorità massima di ntfy, suono e vibrazione lunga sopra le altre app; con l'app aperta un din-don ripetuto tre volte) o *Normale*. Per farlo suonare **finché non rispondi**: in ntfy, impostazioni del canale MyList → *Avvisi insistenti* (Insistent max priority). La suoneria si cambia da Android → App → ntfy → Notifiche → Priorità massima.
-
-Le ricorrenti vengono programmate su ntfy per tutte le volte dei prossimi 3 giorni, così la pasticca suona anche se non apri MyList per un paio di giorni.
+Fino alla 1.32 c'era anche **ntfy**: dalla 1.33 non serve più. Alla prima apertura MyList cancella da ntfy.sh gli avvisi che aveva già programmato e dimentica il canale; l'app ntfy si può disinstallare.
 
 ## Struttura
 
@@ -127,7 +123,7 @@ js/ai.js                OpenRouter: smistamento, chat dell'assistente, test, ele
 js/chat.js              la chat con l'assistente (Lisa): contesto, cartellini, modifiche con Annulla / Applica
 js/talk.js              la chat a voce a mani libere: il nucleo che ascolta, pensa e parla
 js/when.js              date, orari e promemoria senza AI ("alle 16", "tra 20 minuti", "mezz'ora prima")
-js/reminders.js         avvisi: notifiche locali + programmazione su ntfy
+js/reminders.js         avvisi: notifiche native (app Android) o del browser, avvisi insistenti
 js/sound.js             din-don dei promemoria con l'app aperta (sintetizzato, nessun file)
 js/native.js            solo nell'app Android: dettatura, voce, tasto indietro e aggiornamenti coi plugin nativi
 sw.js                   service worker (offline)

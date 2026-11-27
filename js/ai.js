@@ -174,16 +174,18 @@ Come scrivere le voci:
 5. "in": se il momento è relativo ("tra 20 minuti" → 20, "fra un'ora" → 60, "tra un quarto d'ora" → 15) metti i minuti da adesso e lascia "due" e "time" null; altrimenti null.
 6. "remind": l'utente vuole essere AVVISATO? Metti quanti minuti PRIMA del momento indicato ("avvisami mezz'ora prima" → 30, "un'ora prima" → 60, "il giorno prima" → 1440, "avvisami alle 16" o "ricordami tra 20 minuti" → 0). Con "in" l'avviso è sempre implicito: 0. Se chiede di essere avvisato per un giorno senza orario ("ricordami domani di…") metti "time" "09:00" e "remind" 0. Se non chiede un avviso: null. "Ricordami di X" senza nessun giorno né orario NON è un avviso: null.
 7. "repeat": se è una cosa che si ripete ("ogni giorno", "tutte le sere", "il lunedì", "ogni lunedì e giovedì", "dal lunedì al venerdì", "ogni 2 giorni", "ogni mese") metti {"every":"day"|"week"|"month","n":1,"days":null}. Per giorni precisi della settimana usa "week" con "days" (0=domenica, 1=lunedì … 6=sabato), es. lunedì e giovedì → {"every":"week","n":1,"days":[1,4]}; "ogni 2 giorni" → {"every":"day","n":2,"days":null}. "due" = la prima volta (se non è chiaro lascia null). Una ricorrenza con un orario ("ogni giorno alle 8 prendere la pasticca") è un promemoria: "remind" 0 se non viene indicato un anticipo. "ogni mattina" senza orario → "08:00", "ogni sera" → "20:00". Altrimenti "repeat" null.
+8. "nag": l'utente vuole un avviso INSISTENTE, che torna finché non l'ha fatto ("ricordamelo ogni ora finché non l'ho fatto", "insisti ogni mezz'ora", "finché non pago")? Metti ogni quanti minuti (ogni ora → 60, ogni mezz'ora → 30, ogni 20 minuti → 20; se dice solo "finché non…" o "insisti" → 60). Il primo avviso è il momento indicato; se non indica un momento metti "in" uguale a "nag". Altrimenti null.
 Togli sempre dal testo le indicazioni di giorno, orario, ricorrenza e avviso ("domani", "alle 16", "avvisami mezz'ora prima", "tra 20 minuti").
 
 Esempi di risposta:
 - "il codice del garage è 123123" → {"items":[],"done":[],"notes":[{"idea":false,"title":"Codice del garage","text":"Il codice del garage è 123123."}],"search":null}
 - "si potrebbe dipingere la porta di rosso" → {"items":[],"done":[],"notes":[{"idea":true,"title":"Porta rossa","text":"Si potrebbe dipingere la porta di rosso."}],"search":null}
-- "comprare il latte" → {"items":[{"text":"Comprare il latte","list":"(la lista adatta)","due":null,"time":null,"in":null,"remind":null,"repeat":null}],"done":[],"notes":[],"search":null}
+- "comprare il latte" → {"items":[{"text":"Comprare il latte","list":"(la lista adatta)","due":null,"time":null,"in":null,"remind":null,"repeat":null,"nag":null}],"done":[],"notes":[],"search":null}
+- "devo fare un bonifico, ricordamelo ogni ora finché non l'ho fatto" → {"items":[{"text":"Fare un bonifico","list":"(la lista adatta)","due":null,"time":null,"in":60,"remind":0,"repeat":null,"nag":60}],"done":[],"notes":[],"search":null}
 - "la password del wifi è pippo123 e domani devo chiamare il tecnico" → un appunto in "notes" ("Password del wifi") e una voce in "items" ("Chiamare il tecnico", due domani).
 
 Rispondi SOLO con JSON valido, senza altro testo:
-{"items":[{"text":"...","list":"...","due":null,"time":null,"in":null,"remind":null,"repeat":null}],"done":[],"notes":[],"search":null}`;
+{"items":[{"text":"...","list":"...","due":null,"time":null,"in":null,"remind":null,"repeat":null,"nag":null}],"done":[],"notes":[],"search":null}`;
 
   const { text: out } = await chat(settings, [
     { role: 'system', content: system },
@@ -200,6 +202,7 @@ Rispondi SOLO con JSON valido, senza altro testo:
       in: mins(i.in) > 0 ? mins(i.in) : null,
       remind: mins(i.remind) != null && mins(i.remind) >= 0 ? mins(i.remind) : null,
       repeat: cleanRepeat(i.repeat),
+      nag: mins(i.nag) > 0 ? mins(i.nag) : null,
     }));
   const done = [...new Set((Array.isArray(obj.done) ? obj.done : [])
     .map((n) => parseInt(n, 10) - 1)
@@ -264,15 +267,15 @@ Rispondi SOLO con JSON, senza altro testo:
 {"reply":"testo per l'utente","actions":[]}
 
 AZIONI
-- {"op":"add","text":"Chiamare Marco","list":"Lavoro","due":"AAAA-MM-GG o null","time":"HH:MM o null","remind":null,"repeat":null}
+- {"op":"add","text":"Chiamare Marco","list":"Lavoro","due":"AAAA-MM-GG o null","time":"HH:MM o null","remind":null,"repeat":null,"nag":null}
 - {"op":"done","ref":"V3"}  la segna fatta (una ricorrente passa da sola alla volta successiva)
 - {"op":"reopen","ref":"V3"}  torna da fare
-- {"op":"edit","ref":"V3", …solo i campi da cambiare tra "text","list","due","time","remind","repeat"; null toglie il valore}
+- {"op":"edit","ref":"V3", …solo i campi da cambiare tra "text","list","due","time","remind","repeat","nag"; null toglie il valore}
 - {"op":"delete","ref":"V3"}  elimina una voce, oppure un appunto/idea ("N2": finisce negli eliminati di recente)
 - {"op":"note","title":"","text":"…","idea":false}  nuovo appunto (idea: true per un'idea)
 - {"op":"edit_note","ref":"N2","title":"…","text":"…"}  "text" = il testo COMPLETO nuovo; metti solo i campi da cambiare
 - {"op":"to_item","ref":"N2","list":"Casa"}  un appunto o un'idea diventa una cosa da fare in quella lista
-Regole: "list" è il nome di una lista esistente (una nuova solo se l'utente la chiede). Le date relative ("lunedì", "domani", "tra una settimana") convertile tu in AAAA-MM-GG. "remind" = minuti di anticipo dell'avviso: 0 = all'ora indicata, null = nessun avviso; un avviso vuole sempre un "time" (se manca usa "09:00"). "repeat": null oppure {"every":"day"|"week"|"month","n":1,"days":[0-6] o null} (0 = domenica).
+Regole: "list" è il nome di una lista esistente (una nuova solo se l'utente la chiede). Le date relative ("lunedì", "domani", "tra una settimana") convertile tu in AAAA-MM-GG. "remind" = minuti di anticipo dell'avviso: 0 = all'ora indicata, null = nessun avviso; un avviso vuole sempre un "time" (se manca usa "09:00"). "repeat": null oppure {"every":"day"|"week"|"month","n":1,"days":[0-6] o null} (0 = domenica). "nag" = avviso insistente: ogni quanti minuti torna l'avviso finché la cosa non è fatta ("ricordamelo ogni ora finché non l'ho fatto" → 60); null = una volta sola. Se l'utente non dà un momento, il primo avviso è tra "nag" minuti: calcola tu "due" e "time".
 Nella "reply" di' in breve cosa hai fatto ("Fatto, ho spostato 3 voci a lunedì 1 dicembre."). Se la richiesta è ambigua (più voci possibili) chiedi quale, senza azioni. Non toccare niente che l'utente non ha chiesto.`;
   const { text } = await chat(settings, [{ role: 'system', content: system }, ...history], { maxTokens: 1500, timeout: 60000 });
   let obj;

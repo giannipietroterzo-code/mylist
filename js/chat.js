@@ -5,7 +5,7 @@
 import { icon, listIcon } from './icons.js';
 import { data, settings, saveData, snapshot, uid, findListByName, nextColor, suggestStyle, trashNote } from './store.js';
 import { aiReady, converse } from './ai.js';
-import { dayKey, hhmm, dayFor, firstDue, remindAt, repeatLabel } from './when.js';
+import { dayKey, hhmm, dayFor, firstDue, remindAt, repeatLabel, nagLabel, fromNow } from './when.js';
 import { settle } from './reminders.js';
 import { voiceSupported } from './voice.js';
 import { openTalk, closeTalk, talkOpen, initTalk } from './talk.js';
@@ -63,6 +63,7 @@ function whenOf(it) {
   if (!it.done && (it.due < today || (it.due === today && it.time && it.time < hhmm(new Date())))) s += ' (IN RITARDO)';
   if (remindAt(it) != null) s += ` · avviso ${it.remind ? `${it.remind} min prima` : "all'ora"}`;
   if (it.repeat) s += ` · si ripete: ${repeatLabel(it.repeat).toLowerCase()}`;
+  if (it.nag && remindAt(it) != null) s += ` · avviso insistente ${nagLabel(it.nag)} finché non è fatta`;
   return s;
 }
 function context() {
@@ -120,6 +121,8 @@ const whenTxt = (due, time) => (due ? ` · ${app.dueLabel(due, time).text}` : ti
 
 // Scadenza, orario, avviso e ripetizione coerenti tra loro (come nella modifica a mano)
 function fix(it) {
+  // insistente senza un momento: il primo avviso tra un intervallo
+  if (it.nag && it.remind == null) { if (!it.due && !it.time && !it.repeat) Object.assign(it, fromNow(it.nag)); it.remind = 0; }
   if (it.remind != null && !it.time) it.time = '09:00';
   if (it.repeat) {
     if (it.repeat.every === 'week' && !it.repeat.days) it.repeat.days = [new Date((it.due || dayKey(new Date())) + 'T12:00:00').getDay()];
@@ -137,6 +140,7 @@ function editParts(it, a) {
   if (has(a, 'time')) p.push(cleanTime(a.time) ? `alle ${cleanTime(a.time)}` : 'senza orario');
   if (has(a, 'remind')) p.push(mins(a.remind) == null ? 'senza avviso' : mins(a.remind) ? `avviso ${mins(a.remind)} min prima` : "avviso all'ora");
   if (has(a, 'repeat')) p.push(cleanRepeat(a.repeat) ? repeatLabel(cleanRepeat(a.repeat)).toLowerCase() : 'non si ripete');
+  if (has(a, 'nag')) p.push(mins(a.nag) ? `avviso insistente ${nagLabel(mins(a.nag))}` : 'avviso una volta sola');
   return p;
 }
 function editFields(it, a) {
@@ -146,6 +150,7 @@ function editFields(it, a) {
   if (has(a, 'time')) it.time = cleanTime(a.time);
   if (has(a, 'remind')) it.remind = mins(a.remind);
   if (has(a, 'repeat')) it.repeat = cleanRepeat(a.repeat);
+  if (has(a, 'nag')) it.nag = mins(a.nag) || null;
   if (has(a, 'due') && !it.due) { it.time = null; it.remind = null; it.repeat = null; }
   if (it.repeat || it.due || it.time) it.fired = null;
   fix(it);
@@ -165,9 +170,9 @@ function plan(actions) {
         if (!text) break;
         const due = DATE.test(a.due || '') ? a.due : null;
         ops.push({
-          ico: 'plus', desc: `Nuova in ${listName(a.list)}: ${text}${whenTxt(due, cleanTime(a.time))}${mins(a.remind) != null ? ' · con avviso' : ''}`,
+          ico: 'plus', desc: `Nuova in ${listName(a.list)}: ${text}${whenTxt(due, cleanTime(a.time))}${mins(a.nag) ? ` · avviso ${nagLabel(mins(a.nag))} finché non è fatta` : mins(a.remind) != null ? ' · con avviso' : ''}`,
           run: () => {
-            const it = { id: uid(), text, listId: listFor(a.list).id, done: false, due, time: cleanTime(a.time), remind: mins(a.remind), repeat: cleanRepeat(a.repeat), createdAt: Date.now() };
+            const it = { id: uid(), text, listId: listFor(a.list).id, done: false, due, time: cleanTime(a.time), remind: mins(a.remind), repeat: cleanRepeat(a.repeat), nag: mins(a.nag) || null, createdAt: Date.now() };
             fix(it);
             data.items.push(it);
             app.ui.fresh.add(it.id);

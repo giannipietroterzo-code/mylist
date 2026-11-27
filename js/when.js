@@ -1,6 +1,7 @@
 // Date, orari e promemoria senza AI: "alle 16:00", "tra 20 minuti", "domani", "avvisami mezz'ora prima"
 // Una voce può avere: due (YYYY-MM-DD), time (HH:MM), remind (minuti di anticipo, 0 = all'ora; null = nessun avviso)
 // e repeat ({ every: 'day' | 'week' | 'month', n: 1, days: [0-6] | null }): quando la completi passa alla volta successiva
+// e nag (minuti): avviso insistente, dopo il primo avviso torna ogni nag minuti finché la voce non è fatta
 
 export const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 export const hhmm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -74,6 +75,15 @@ export function occurrences(it, untilMs) {
   return out;
 }
 
+// "ogni ora", "ogni mezz'ora", "ogni 20 min", "ogni 2 ore"
+export function nagLabel(n) {
+  if (!(n > 0)) return '';
+  if (n === 60) return 'ogni ora';
+  if (n === 30) return "ogni mezz'ora";
+  if (n % 60 === 0) return `ogni ${n / 60} ore`;
+  return `ogni ${n} min`;
+}
+
 export function repeatLabel(rep) {
   if (!rep) return '';
   const n = rep.n > 1 ? rep.n : 0;
@@ -103,6 +113,15 @@ function minutes(a) {
 }
 
 const REMIND_VERB = String.raw`(?:avvisami|avvisarmi|avvertimi|ricordamelo|ricordami|ricordarmi|notificami|mandami\s+un\s+avviso|fammi\s+un\s+promemoria)`;
+// insistente: "ogni ora", "ogni mezz'ora", "ogni 20 minuti", "ogni quarto d'ora" … "finché non l'ho fatto"
+const EVERY = String.raw`ogni\s+(ora|mezz['’ ]?\s?ora|quarto\s+d['’ ]?\s?ora|(?:\d+|due|tre|quattro|cinque|sei|dieci|quindici|venti|trenta|quaranta|cinquanta)\s*(?:minut[oi]|min|or[ae]))`;
+const UNTIL = String.raw`(?:finch[eé]|fino\s+a\s+quando|fintanto\s+che|fin\s+quando|fino\s+a\s+che)\s+non\s+(?:l['’]\s?(?:ho|avr[oò]|abbia)\s+(?:fatt[oa]|finit[oa]|pagat[oa]|chiamat[oa])|(?:è|sarà|sia)\s+(?:fatt[oa]|finit[oa])|(?:ho|avr[oò])\s+(?:fatto|finito)|(?:lo|la|li|le)\s+(?:faccio|finisco|segno|spunto)|(?:l['’]\s?)?\p{L}+(?:\s+\p{L}+)?)`;
+function nagMinutes(w) {
+  w = w.toLowerCase();
+  if (w === 'ora') return 60;
+  if (w.includes('quarto')) return 15;
+  return minutes(w) || 60;
+}
 const HOUR = String.raw`(\d{1,2}|una|due|tre|quattro|cinque|sei|sette|otto|nove|dieci|undici|dodici)`;
 const DAYS = ['domenica', 'lunedi', 'martedi', 'mercoledi', 'giovedi', 'venerdi', 'sabato'];
 const MONTHS = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
@@ -122,10 +141,15 @@ export function parseWhen(raw, now = new Date()) {
   const wants = new RegExp(`\\b${REMIND_VERB}\\b`, 'i').test(t);
   const cut = (re, fn) => { t = t.replace(re, (...m) => { fn(...m); return ' '; }); };
   let repeat = null;
+  let nag = null;
   let partDefault = null;
   const dayIdx = (w) => DAYS.indexOf(w.toLowerCase().replace('ì', 'i'));
   const WD = String.raw`luned[iì]|marted[iì]|mercoled[iì]|gioved[iì]|venerd[iì]|sabato|domenica`;
 
+  // insistente: "ogni ora finché non l'ho fatto", "ricordamelo ogni mezz'ora", "finché non pago", "insisti"
+  cut(new RegExp(`\\s(?:e\\s+)?(?:${REMIND_VERB}\\s+)?${EVERY}(?:\\s*,?\\s*${UNTIL})?(?=[\\s,.!?]|$)`, 'iu'), (m, w) => { nag = nagMinutes(w); });
+  cut(new RegExp(`\\s(?:e\\s+)?(?:${REMIND_VERB}\\s+)?,?\\s*${UNTIL}(?=[\\s,.!?]|$)`, 'iu'), () => { nag = nag || 60; });
+  cut(/\s(?:e\s+)?(?:insisti|insistente(?:mente)?|in\s+modo\s+insistente)(?=[\s,.!?])/iu, () => { nag = nag || 60; });
   // ricorrenze: "ogni giorno", "tutte le mattine", "ogni 2 giorni", "ogni lunedì e giovedì", "dal lunedì al venerdì", "ogni mese"
   cut(/\s(?:dal\s+luned[iì]\s+al\s+venerd[iì]|(?:nei|tutti\s+i|ogni)\s+giorn[oi]\s+feriali?|nei\s+feriali)(?=[\s,.!?])/iu, () => { repeat = { every: 'week', n: 1, days: [1, 2, 3, 4, 5] }; });
   cut(/\s(?:nel|ogni|tutti\s+i)\s+(?:weekend|fine\s+settimana)(?=[\s,.!?])/iu, () => { repeat = { every: 'week', n: 1, days: [0, 6] }; });
@@ -183,6 +207,8 @@ export function parseWhen(raw, now = new Date()) {
   if (time && evening && +time.slice(0, 2) < 12) time = `${+time.slice(0, 2) + 12}:${time.slice(3)}`;
 
   if (repeat && !time && partDefault) time = partDefault;
+  // insistente senza un momento: il primo avviso arriva dopo il primo intervallo ("ricordamelo ogni ora" → tra un'ora)
+  if (nag && inMin == null && !time && !due) inMin = nag;
   if (inMin != null) ({ due, time } = fromNow(inMin, now));
   else if (repeat) {
     // "ogni settimana" parte dal giorno detto (o da oggi) e si ripete in quel giorno
@@ -193,7 +219,7 @@ export function parseWhen(raw, now = new Date()) {
   // "tra 20 minuti…" è quasi sempre un "avvisami": l'avviso parte anche senza chiederlo.
   // Una ricorrenza con orario ("ogni giorno alle 8 la pasticca") è un promemoria: avvisa all'ora
   let remind = lead != null ? lead : (wants && time) || inMin != null || (repeat && time) ? 0 : null;
-  if (remind == null && wants && due) { time = time || '09:00'; remind = 0; }
+  if (remind == null && (wants || nag) && due) { time = time || '09:00'; remind = 0; }
   if (remind != null && !time) { time = '09:00'; due = due || dayFor(time, now); }
 
   // pulizia del testo: verbi di servizio e connettori rimasti
@@ -201,5 +227,5 @@ export function parseWhen(raw, now = new Date()) {
   t = t.replace(/\s+/g, ' ').trim().replace(/^[,.;:]\s*/, '').replace(/[,;:]\s*$/, '');
   for (let i = 0; i < 3; i++) t = t.replace(/^(?:devo|dovrei|bisogna|ricordati\s+di|ricordarsi\s+di|di|che|e)\s+/i, '');
   if (t) t = t[0].toUpperCase() + t.slice(1);
-  return { text: t, due, time, remind, repeat };
+  return { text: t, due, time, remind, repeat, nag };
 }

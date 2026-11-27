@@ -58,7 +58,7 @@ export const DEFAULT_SETTINGS = {
   showDone: false,
   view: 'all',
   target: 'inbox',
-  ntfyTopic: '', // canale ntfy per gli avvisi ad app chiusa ('' = spento)
+  ntfyTopic: '', // canale ntfy usato fino alla 1.32: resta solo finché reminders.js non ha cancellato i vecchi avvisi
   alertLevel: 'loud', // loud | normal: quanto si fanno sentire i promemoria
   chromeAI: false, // IA di Chrome attivata: risponde prima di OpenRouter
   aiName: '', // nome dell'assistente della chat ('' = Lisa)

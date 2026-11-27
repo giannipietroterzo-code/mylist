@@ -567,6 +567,8 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 .tag.bell { --c: var(--accent-ink); background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent-ink); }
 .tag.bell .ico { font-size: 12px; }
 .tag.bell.past { background: var(--surface-2); color: var(--text-3); }
+.tag.nag { background: var(--accent); color: var(--on-accent); }
+.tag.nag .ico { font-size: 12px; }
 .top-gap-s { margin-top: 8px; }
 .ok-badge { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 999px; background: color-mix(in srgb, #2F9E44 14%, transparent); color: #2F9E44; font-weight: 600; font-size: 14px; }
 .steps { list-style: none; counter-reset: st; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }

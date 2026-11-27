@@ -9,9 +9,9 @@ import { voiceSupported, listen } from './voice.js';
 const PAUSE_MS = { short: 900, normal: 1500, long: 2500 };
 const VERSION = window.MYLIST_VERSION || '';
 import { aiReady, aiSource, chromeAI, chromeAuto, detectChromeAI, downloadChromeAI, organize, answer, makeTitle, testConnection, listModels } from './ai.js';
-import { dayKey, addDays, hhmm, parseWhen, remindAt, fromNow, dayFor, firstDue, advance, repeatLabel, sameRepeat } from './when.js';
+import { dayKey, addDays, hhmm, parseWhen, remindAt, fromNow, dayFor, firstDue, advance, repeatLabel, sameRepeat, nagLabel } from './when.js';
 import { chime, primeSound } from './sound.js';
-import { initReminders, settle, notifySupported, notifyPermission, askNotify, newTopic, ntfyLink, sendTest } from './reminders.js';
+import { initReminders, settle, notifySupported, notifyPermission, askNotify } from './reminders.js';
 import { initChat, openChat, calledAssistant, aiName, DEFAULT_NAME } from './chat.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -77,7 +77,7 @@ function parseQuick(raw, fallbackListId) {
     return m;
   });
   const w = parseWhen(text);
-  return { text: w.text, listId, due: w.due, time: w.time, remind: w.remind, repeat: w.repeat };
+  return { text: w.text, listId, due: w.due, time: w.time, remind: w.remind, repeat: w.repeat, nag: w.nag || null };
 }
 
 // ---------- Appunti senza AI: "prendi nota…", "appunto:", "annota che…", "segna che…" ----------
@@ -127,7 +127,9 @@ const STOP = new Set(['del', 'della', 'dello', 'dei', 'degli', 'delle', 'dal', '
   'tutto', 'tutta', 'tutti', 'tutte', 'quel', 'quella', 'quello', 'questo', 'questa', 'ora', 'adesso', 'oggi', 'come', 'fatto', 'fatta', 'lista']);
 const stem = (w) => (w.length > 4 ? w.slice(0, -2) : w);
 const words = (t) => norm(t).split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 2 && !STOP.has(w));
-const looksDone = (t) => DONE_HEAD.test(t.trim()) || DONE_TAIL.test(t.trim());
+// "ricordamelo finché non l'ho fatto" finisce con "fatto" ma è un avviso insistente, non una cosa già fatta
+const UNTIL_NOT = /(?:^|\s)(?:finch[eé]|fino\s+a\s+(?:quando|che)|fintanto\s+che|fin\s+quando)\s+non\s/iu;
+const looksDone = (t) => !UNTIL_NOT.test(t) && (DONE_HEAD.test(t.trim()) || DONE_TAIL.test(t.trim()));
 
 // null = non è una frase "già fatto"; altrimenti gli id delle voci aperte che corrispondono (può essere vuoto)
 function findDoneLocally(text) {
@@ -182,7 +184,7 @@ function addItems(entries, { reveal = false, done = [], notes = [] } = {}) {
   const added = [];
   entries.forEach((e, i) => {
     if (!e.text) return;
-    const it = { id: uid(), text: e.text, listId: e.listId || fallbackList().id, done: false, due: e.due || null, time: e.time || null, remind: e.remind ?? null, repeat: e.repeat || null, createdAt: now - i };
+    const it = { id: uid(), text: e.text, listId: e.listId || fallbackList().id, done: false, due: e.due || null, time: e.time || null, remind: e.remind ?? null, repeat: e.repeat || null, nag: e.nag || null, createdAt: now - i };
     settle(it);
     data.items.push(it);
     ui.fresh.add(it.id);
@@ -232,7 +234,7 @@ function addItems(entries, { reveal = false, done = [], notes = [] } = {}) {
   const lists = [...new Set(added.map((a) => listOf(a).name))];
   const bell = added.map(remindAt).filter((at) => at && at > Date.now());
   const addMsg = !added.length ? ''
-    : added.length === 1 && bell.length ? `Ti avviso ${dayKey(new Date(bell[0])) === dayKey(new Date()) ? '' : dueLabel(dayKey(new Date(bell[0]))).text.toLowerCase() + ' '}alle ${fmtTime(bell[0])} · ${listOf(added[0]).name}`
+    : added.length === 1 && bell.length ? `Ti avviso ${dayKey(new Date(bell[0])) === dayKey(new Date()) ? '' : dueLabel(dayKey(new Date(bell[0]))).text.toLowerCase() + ' '}alle ${fmtTime(bell[0])}${added[0].nag ? `, poi ${nagLabel(added[0].nag)} finché non è fatta` : ''} · ${listOf(added[0]).name}`
     : added.length === 1 ? `Aggiunta in ${listOf(added[0]).name}` : `${added.length} voci → ${lists.join(', ')}`;
   if (bell.length) nudgeNotify();
   const doneMsg = !finishing.length ? ''
@@ -244,7 +246,7 @@ function addItems(entries, { reveal = false, done = [], notes = [] } = {}) {
   toast([addMsg, doneMsg, noteMsg].filter(Boolean).join(' · '), 'Annulla', undo);
 }
 
-// "Fatto" toccato su una notifica (ntfy o MyList): id della voce e giorno di quella volta
+// "Fatto" toccato su una notifica: id della voce e giorno di quella volta
 function remoteDone(id, due) {
   const it = data.items.find((i) => i.id === id);
   if (!it || it.done || (it.repeat && due && it.due > due)) return; // già fatta (o già passata alla volta dopo)
@@ -257,11 +259,11 @@ function remoteDone(id, due) {
 
 // Primo promemoria senza un canale per gli avvisi: dopo la conferma, proponi di attivarli
 function nudgeNotify() {
-  if (ui.nudged || settings.ntfyTopic || !notifySupported || notifyPermission() !== 'default') return;
+  if (ui.nudged || !notifySupported || notifyPermission() !== 'default') return;
   ui.nudged = true;
   setTimeout(() => toast('Per ricevere gli avvisi attiva le notifiche', 'Attiva', async () => {
     const p = await askNotify();
-    toast(p === 'granted' ? 'Notifiche attive. Per gli avvisi ad app chiusa vedi Impostazioni → Promemoria' : 'Notifiche non concesse');
+    toast(p === 'granted' ? (native ? 'Notifiche attive: arrivano anche ad app chiusa' : 'Notifiche attive. Per gli avvisi ad app chiusa usa l\'app Android') : 'Notifiche non concesse');
   }), 4700);
 }
 
@@ -337,9 +339,15 @@ async function smartAdd(text, { viaVoice = false } = {}) {
         due = due || firstDue(repeat, time);
         if (time && remind == null) remind = 0;
       }
+      // insistente ("ogni ora finché non l'ho fatto"): senza un momento, il primo avviso arriva dopo il primo intervallo
+      const nag = r.nag || local?.nag || null;
+      if (nag && remind == null) {
+        if (!due && !time && !repeat) ({ due, time } = fromNow(nag));
+        remind = 0;
+      }
       if (remind != null && !time) time = '09:00';
       if (time && !due) due = dayFor(time);
-      return { text: r.text, listId: (l || targetList()).id, due, time, remind, repeat };
+      return { text: r.text, listId: (l || targetList()).id, due, time, remind, repeat, nag };
     });
     addItems(entries, { reveal: viaVoice, done: res.done.map((n) => todo[n].id), notes: res.notes });
   } catch (err) {
@@ -410,6 +418,7 @@ function itemHTML(it, showList) {
     due && !it.done ? `<span class="tag due ${due.cls}">${icon(it.time ? 'clock' : 'calendar')}${due.text}</span>` : '',
     it.repeat && !it.done ? `<span class="tag rep">${icon('repeat')}${repeatLabel(it.repeat)}</span>` : '',
     at && !it.done ? `<span class="tag bell ${it.fired === at ? 'past' : ''}" title="Avviso">${icon('bell')}${it.remind ? fmtTime(at) : ''}</span>` : '',
+    at && it.nag && !it.done ? `<span class="tag nag" title="Avviso insistente: torna finché non è fatto">${icon('bell')}${nagLabel(it.nag)}</span>` : '',
   ].join('');
   return `<li class="item ${it.done ? 'is-done' : ''} ${ui.fresh.has(it.id) ? 'pop' : ''}" data-id="${it.id}" style="${cv(l.color)}">
     <div class="swipe-bg"><span class="sw-l">${icon('check')}</span><span class="sw-r">${icon('trash')}</span></div>
@@ -818,6 +827,7 @@ sheet.addEventListener('cancel', (e) => { e.preventDefault(); closeSheet(); });
 
 // ---------- Modifica voce ----------
 const REPEAT_OPTS = [[null, 'Mai'], [{ every: 'day', n: 1, days: null }, 'Ogni giorno'], [{ every: 'week', n: 1, days: [1, 2, 3, 4, 5] }, 'Lun–ven'], [{ every: 'week', n: 1, days: null }, 'Ogni settimana'], [{ every: 'month', n: 1, days: null }, 'Ogni mese']];
+const NAG_OPTS = [[null, 'Una volta'], [15, 'Ogni 15 min'], [30, "Ogni mezz'ora"], [60, 'Ogni ora'], [120, 'Ogni 2 ore']];
 const REMIND_OPTS = [[null, 'Nessun avviso'], [0, "All'ora"], [10, '10 min prima'], [30, '30 min prima'], [60, '1 ora prima'], [1440, '1 giorno prima']];
 function editItem(id) {
   const it = data.items.find((i) => i.id === id);
@@ -849,7 +859,13 @@ function editItem(id) {
     <div class="row wrap" id="eRemind">
       ${REMIND_OPTS.map(([v, t]) => `<button class="chip soft ${(it.remind ?? null) === v ? 'on' : ''}" data-remind="${v ?? ''}">${v == null ? '' : icon('bell')}${t}</button>`).join('')}
     </div>
-    ${remindAt(it) ? `<p class="muted small">${icon('bell')} Avviso ${dueLabel(dayKey(new Date(remindAt(it)))).text.replace(/ \d.*/, '').toLowerCase()} alle ${fmtTime(remindAt(it))}${settings.ntfyTopic ? '' : ' · arriva se MyList è aperta o in background (per averlo sempre: Impostazioni → Promemoria)'}</p>` : ''}
+    <label class="lbl">Insisti finché non è fatta</label>
+    <div class="row wrap" id="eNag">
+      ${NAG_OPTS.map(([v, t]) => `<button class="chip soft ${(it.nag || null) === v ? 'on' : ''}" data-nag="${v ?? ''}">${v == null ? '' : icon('bell')}${t}</button>`).join('')}
+      ${it.nag && !NAG_OPTS.some(([v]) => v === it.nag) ? `<button class="chip soft on" data-nag="${it.nag}">${icon('bell')}${nagLabel(it.nag)}</button>` : ''}
+    </div>
+    ${it.nag && remindAt(it) && remindAt(it) < Date.now() ? `<p class="muted small">${icon('bell')} Prossimo avviso alle ${fmtTime(remindAt(it) + Math.ceil((Date.now() - remindAt(it)) / (it.nag * 60000)) * it.nag * 60000)}, poi ${nagLabel(it.nag)} finché non è fatta</p>`
+      : remindAt(it) ? `<p class="muted small">${icon('bell')} Avviso ${dueLabel(dayKey(new Date(remindAt(it)))).text.replace(/ \d.*/, '').toLowerCase()} alle ${fmtTime(remindAt(it))}${it.nag ? `, poi ${nagLabel(it.nag)} finché non è fatta` : ''}${native ? '' : ' · sul sito arriva solo se MyList è aperta o in background (per averlo sempre: l\'app Android)'}</p>` : ''}
     <button class="link-btn top-gap" id="eToNote">${icon('notes')}Non è una cosa da fare: spostala nelle Note</button>
     <div class="row top-gap">
       <button class="pill-btn danger ghost grow" id="eDel">${icon('trash')}Elimina</button>
@@ -921,6 +937,22 @@ function editItem(id) {
       commit();
       editItem(id);
       if (it.remind != null) nudgeNotify();
+    });
+    $('#eNag', root).addEventListener('click', (e) => {
+      const b = e.target.closest('[data-nag]');
+      if (!b) return;
+      it.nag = b.dataset.nag === '' ? null : +b.dataset.nag;
+      // insistente senza avviso: il primo arriva dopo il primo intervallo (o all'ora, se c'è già un momento)
+      if (it.nag && it.remind == null) {
+        if (!it.due && !it.time) Object.assign(it, fromNow(it.nag));
+        it.remind = 0;
+        if (!it.time) it.time = '09:00';
+        if (!it.due) it.due = dayFor(it.time);
+      }
+      settle(it);
+      commit();
+      editItem(id);
+      if (it.nag) nudgeNotify();
     });
     $('#eDel', root).addEventListener('click', () => {
       closeSheet();
@@ -1250,31 +1282,10 @@ function notifyRow() {
   const p = notifyPermission();
   if (!notifySupported) return `<span class="muted small">${icon('warn')} Non supportate da questo browser</span>`;
   if (p === 'granted') return native
-    ? `<span class="ok-badge">${icon('check')}Attive</span><p class="muted small">Nell'app Android gli avvisi arrivano all'ora esatta anche ad app chiusa e dopo un riavvio, con <b>Fatto</b> e <b>+10 min</b> sulla notifica: ntfy non serve.</p>`
+    ? `<span class="ok-badge">${icon('check')}Attive</span><p class="muted small">Nell'app Android gli avvisi arrivano all'ora esatta anche ad app chiusa e dopo un riavvio, con <b>Fatto</b> e <b>+10 min</b> sulla notifica.</p>`
     : `<span class="ok-badge">${icon('check')}Attive</span>`;
   if (p === 'denied') return `<span class="muted small">${icon('warn')} Bloccate: ${native ? 'riattivale da Impostazioni Android → App → MyList → Notifiche' : 'riattivale dalle impostazioni del sito in Chrome (lucchetto → Autorizzazioni)'}</span>`;
   return `<button class="pill-btn ghost" id="sNotify">${icon('bell')}Attiva notifiche</button>`;
-}
-function ntfyBox() {
-  const t = settings.ntfyTopic;
-  if (!t) return `<p class="muted small">Con l'app gratuita <b>ntfy</b> gli avvisi arrivano all'ora giusta anche con MyList chiusa e il telefono in tasca.</p>`;
-  return `<ol class="steps">
-      <li><span>Installa <b>ntfy</b> dal Play Store</span><a class="pill-btn ghost small-btn" href="https://play.google.com/store/apps/details?id=io.heckel.ntfy" target="_blank" rel="noopener">Play Store</a></li>
-      <li><span>Collega MyList: si apre ntfy e si iscrive al tuo canale</span><a class="pill-btn small-btn" href="${ntfyLink(t)}">${icon('bell')}Collega</a></li>
-      <li><span>Controlla che arrivi e che suoni</span><button class="pill-btn ghost small-btn" id="sNtfyTest">${icon('send')}Prova</button></li>
-    </ol>
-    <p class="status small" id="sNtfyStatus"></p>
-    <p class="muted small">Canale privato: <code>${esc(t)}</code><br>Il testo dei promemoria passa dal server ntfy.sh, che lo consegna al telefono (si programma fino a 3 giorni prima; gli avvisi più lontani partono alle aperture successive di MyList). In ntfy attiva la <i>consegna istantanea</i> per non avere ritardi.</p>
-    <div class="howto">
-      <b>${icon('bell')} Per farlo suonare finché non rispondi</b>
-      <ol>
-        <li>In ntfy tocca il canale <b>MyList</b> → menu ⋮ → <b>Impostazioni</b> dell'iscrizione</li>
-        <li>Attiva <b>Avvisi insistenti</b> (<i>Insistent max priority</i>): suona e vibra di continuo finché non tocchi la notifica</li>
-        <li>Per cambiare la suoneria: impostazioni Android → App → ntfy → Notifiche → <b>Priorità massima</b> → Suono (lì puoi anche fargli ignorare il <i>Non disturbare</i>)</li>
-      </ol>
-      <p>I nomi delle voci possono cambiare un po' tra versioni di ntfy e di Android.</p>
-    </div>
-    <p class="muted small">${icon('bell')} Sulla notifica trovi <b>Fatto</b> e <b>+10 min</b>: funzionano senza aprire MyList. I "Fatto" vengono spuntati qui quando riapri l'app (entro 12 ore).</p>`;
 }
 function bindReminderSettings(root) {
   const bindNotify = () => $('#sNotify', root)?.addEventListener('click', async () => {
@@ -1283,31 +1294,6 @@ function bindReminderSettings(root) {
     bindNotify();
   });
   bindNotify();
-  const bindTest = () => $('#sNtfyTest', root)?.addEventListener('click', async () => {
-    const st = $('#sNtfyStatus', root);
-    st.className = 'status small';
-    st.textContent = 'Invio…';
-    try {
-      await sendTest(settings.ntfyTopic);
-      st.classList.add('ok');
-      st.textContent = 'Inviato: ti è arrivata la notifica di ntfy?';
-    } catch (err) {
-      st.classList.add('err');
-      st.textContent = `Errore: ${err.message}`;
-    }
-  });
-  bindTest();
-  $('#sNtfy', root).addEventListener('click', (e) => {
-    const b = e.target.closest('[data-v]');
-    if (!b) return;
-    settings.ntfyTopic = b.dataset.v === 'on' ? (settings.ntfyTopic || ui.lastTopic || newTopic()) : '';
-    if (settings.ntfyTopic) ui.lastTopic = settings.ntfyTopic;
-    saveSettings();
-    $('#sNtfy', root).querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
-    $('#sNtfyBox', root).innerHTML = ntfyBox();
-    bindTest();
-    window.dispatchEvent(new Event('mylist:saved'));
-  });
 }
 
 // ---------- Impostazioni ----------
@@ -1368,7 +1354,7 @@ function openSettings() {
 
     <section class="card">
       <h3>${icon('bell')}Promemoria</h3>
-      <p class="muted small">Di' o scrivi <i>"alle 16 prendere la pasticca, avvisami mezz'ora prima"</i> oppure <i>"ricordami tra 20 minuti di aprire il cancello"</i>.</p>
+      <p class="muted small">Di' o scrivi <i>"alle 16 prendere la pasticca, avvisami mezz'ora prima"</i> oppure <i>"ricordami tra 20 minuti di aprire il cancello"</i>. Per un avviso che torna finché non lo fai: <i>"bonifico, ricordamelo ogni ora finché non l'ho fatto"</i>.</p>
       <label class="lbl">Come suonano</label>
       ${seg('alertLevel', settings.alertLevel, [['loud', 'Forte'], ['normal', 'Normale']])}
       <p class="muted small"><b>Forte</b>: suona tre volte, vibra a lungo e compare sopra le altre app. <b>Normale</b>: un solo din-don e una vibrazione breve.</p>
@@ -1376,11 +1362,7 @@ function openSettings() {
 
       <label class="lbl">Notifiche di questo telefono</label>
       <div class="row wrap" id="sNotifyRow">${notifyRow()}</div>
-      <p class="muted small">Arrivano se MyList è aperta o in background da poco: un'app web non può svegliarsi da sola a telefono in tasca.</p>
-
-      <label class="lbl">Avvisi sicuri anche ad app chiusa</label>
-      <div class="seg" id="sNtfy"><button class="${settings.ntfyTopic ? '' : 'on'}" data-v="off">Spenti</button><button class="${settings.ntfyTopic ? 'on' : ''}" data-v="on">Con ntfy</button></div>
-      <div id="sNtfyBox">${ntfyBox()}</div>
+      ${native ? '' : `<p class="muted small">Sul sito arrivano solo se MyList è aperta o in background da poco: un'app web non può svegliarsi da sola. Per gli avvisi all'ora esatta anche ad app chiusa usa l'<b>app Android</b> (<a href="https://github.com/giannipietroterzo-code/mylist/releases/latest" target="_blank" rel="noopener">scaricala qui</a>).</p>`}
     </section>
 
     <section class="card">
@@ -1449,7 +1431,6 @@ function openSettings() {
       s.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
       saveSettings();
       if (s.dataset.seg === 'theme') applyTheme();
-      if (s.dataset.seg === 'alertLevel') window.dispatchEvent(new Event('mylist:saved')); // riprogramma ntfy col nuovo livello
       render();
     }));
     $('#sLang', root).onchange = (e) => { settings.lang = e.target.value; saveSettings(); };
@@ -1868,12 +1849,14 @@ primeSound();
 // La chat con l'assistente: le serve sapere come l'app completa, apre e disegna le cose
 initChat({ render, listOf, complete, dueLabel, toast, editItem, editNote, speak, cv, esc, autoTitle, openSettings, targetList, ui });
 initReminders({
-  fire: (it, late) => {
+  fire: (it, late, k) => {
     const loud = settings.alertLevel !== 'normal';
     navigator.vibrate?.(loud ? [400, 150, 400, 150, 800] : [200, 100, 200]);
     if (!late && !document.hidden) chime(loud ? 3 : 1);
     render();
-    toast(`${late ? 'Era alle' : 'Promemoria ·'} ${late ? fmtTime(remindAt(it)) + ': ' : ''}${it.text}`, 'Fatto', () => toggleDoneImmediate(it.id));
+    // k > 0: è una ripetizione di un avviso insistente
+    const msg = k ? `Ancora da fare · ${it.text}` : late ? `Era alle ${fmtTime(remindAt(it))}: ${it.text}` : `Promemoria · ${it.text}`;
+    toast(msg, 'Fatto', () => toggleDoneImmediate(it.id));
   },
   remoteDone,
 });
