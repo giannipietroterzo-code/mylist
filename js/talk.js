@@ -236,7 +236,10 @@ function showChanges(m) {
 // Una frase alla volta: su Android un testo lungo detto tutto insieme a volte si interrompe a metà.
 function voices() {
   const lang = (settings.lang || 'it-IT').slice(0, 2);
-  return (window.speechSynthesis?.getVoices() || []).filter((v) => v.lang.replace('_', '-').toLowerCase().startsWith(lang));
+  const vs = (window.speechSynthesis?.getVoices() || []).filter((v) => v.lang.replace('_', '-').toLowerCase().startsWith(lang));
+  // nel giro del tasto prima le voci migliori, nello stesso ordine della scelta di partenza
+  const rank = (v) => { const i = VOICE_PREF.findIndex((re) => re.test(v.name)); return i < 0 ? 99 : i; };
+  return vs.map((v, i) => [v, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(([v]) => v);
 }
 // le voci di Google su Android si chiamano it-it-x-itb-network: diventano "Voce B · online"
 function voiceName(v) {
@@ -244,8 +247,9 @@ function voiceName(v) {
   if (g) return `Voce ${g[1].toUpperCase()}${g[2] === 'network' ? ' · online' : ''}`;
   return v.name.replace(/^(Google|Microsoft|Apple)\s+/i, '').replace(/\s*\(.*\)\s*$/, '').replace(/\s+-\s+.*$/, '').trim() || v.name;
 }
-// la voce di partenza: le femminili di Google (b, c), meglio quelle online (più naturali), poi le altre
-const VOICE_PREF = [/-x-itb-network$/i, /-x-itc-network$/i, /-x-itb-local$/i, /-x-itc-local$/i, /network$/i, /google/i];
+// la voce di partenza: Alice (Mac e iPhone: la più naturale tra quelle del sistema), poi le femminili di Google
+// (b, c), meglio quelle online, poi le altre
+const VOICE_PREF = [/^alice\b/i, /-x-itb-network$/i, /-x-itc-network$/i, /-x-itb-local$/i, /-x-itc-local$/i, /network$/i, /google/i];
 export function chosenVoice() {
   const vs = voices();
   const pref = VOICE_PREF.map((re) => vs.find((v) => re.test(v.name))).find(Boolean);
