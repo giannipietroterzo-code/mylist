@@ -1,3 +1,4 @@
+import { native, checkUpdate, openUpdate } from './native.js'; // per primo: nell'app Android sostituisce dettatura e voce del browser
 import { icon, listIcon } from './icons.js';
 import {
   data, settings, saveData, saveSettings, snapshot, replaceData, resetAll,
@@ -1248,8 +1249,10 @@ function bindChromeAI(root) {
 function notifyRow() {
   const p = notifyPermission();
   if (!notifySupported) return `<span class="muted small">${icon('warn')} Non supportate da questo browser</span>`;
-  if (p === 'granted') return `<span class="ok-badge">${icon('check')}Attive</span>`;
-  if (p === 'denied') return `<span class="muted small">${icon('warn')} Bloccate: riattivale dalle impostazioni del sito in Chrome (lucchetto → Autorizzazioni)</span>`;
+  if (p === 'granted') return native
+    ? `<span class="ok-badge">${icon('check')}Attive</span><p class="muted small">Nell'app Android gli avvisi arrivano all'ora esatta anche ad app chiusa e dopo un riavvio, con <b>Fatto</b> e <b>+10 min</b> sulla notifica: ntfy non serve.</p>`
+    : `<span class="ok-badge">${icon('check')}Attive</span>`;
+  if (p === 'denied') return `<span class="muted small">${icon('warn')} Bloccate: ${native ? 'riattivale da Impostazioni Android → App → MyList → Notifiche' : 'riattivale dalle impostazioni del sito in Chrome (lucchetto → Autorizzazioni)'}</span>`;
   return `<button class="pill-btn ghost" id="sNotify">${icon('bell')}Attiva notifiche</button>`;
 }
 function ntfyBox() {
@@ -1831,6 +1834,22 @@ function handleLaunchParams() {
 
 if (!listById(settings.view) && settings.view !== 'all' && settings.view !== 'notes') settings.view = 'all';
 $('#brandVer').textContent = VERSION ? `v${VERSION}` : '';
+// App Android: c'è una versione nuova? La versione accanto al titolo diventa "↻ 1.32" e si tocca per aggiornare
+if (native) {
+  let checkedAt = 0;
+  const offerUpdate = async (manual = false) => {
+    checkedAt = Date.now();
+    const u = await checkUpdate();
+    if (!u) { if (manual) toast(`Hai già l'ultima versione (${VERSION})`); return; }
+    ui.update = u;
+    $('#brandVer').textContent = `↻ ${u.version}`;
+    $('#brandVer').classList.add('upd');
+    toast(`MyList ${u.version} è pronta`, 'Aggiorna', () => openUpdate(u));
+  };
+  $('#brandVer').addEventListener('click', () => (ui.update ? openUpdate(ui.update) : offerUpdate(true)));
+  setTimeout(offerUpdate, 2500);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - checkedAt > 6 * 3600e3) offerUpdate(); });
+}
 applyTheme();
 bind();
 render();
@@ -1865,7 +1884,9 @@ navigator.serviceWorker?.addEventListener('message', (e) => {
 
 // Aggiornamenti: appena il nuovo service worker prende il controllo ricarica la pagina
 // (se stai scrivendo o dettando, mostra invece un avviso con "Aggiorna")
-if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+// nell'app Android i file sono già nel pacchetto: il service worker servirebbe solo versioni vecchie dopo un aggiornamento
+if (native) navigator.serviceWorker?.getRegistrations?.().then((rs) => rs.forEach((r) => r.unregister())).catch(() => {});
+else if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   const hadController = !!navigator.serviceWorker.controller;
   let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {

@@ -1,0 +1,12 @@
+node_modules/
+www/
+# la chiave di firma NON va mai nel repo (è pubblico): si tiene a parte, con copia di sicurezza
+*.keystore
+*.jks
+keystore.properties
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/app/src/main/assets/public/
+MyList-*.apk

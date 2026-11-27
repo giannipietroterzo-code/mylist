@@ -7,7 +7,10 @@
 //     Sulla notifica ci sono due tasti che funzionano senza aprire MyList:
 //       "Fatto"   → lascia un messaggio nel canale "<canale>-fatto", che MyList legge quando la riapri
 //       "+10 min" → il telefono riprogramma da solo l'avviso su ntfy (fino a 3 volte)
+//  3. Nell'app Android (js/native.js): notifiche native con allarmi esatti, programmate fino a 14 giorni avanti.
+//     Arrivano ad app chiusa e dopo un riavvio, senza ntfy e senza che il testo esca dal telefono.
 import { data, settings, saveData } from './store.js';
+import { native, Notif } from './native.js';
 import { remindAt, occurrences } from './when.js';
 
 const NTFY = 'https://ntfy.sh';
@@ -22,9 +25,17 @@ let onFire = () => {};
 let onRemoteDone = () => {};
 let syncTimer = null;
 
-export const notifySupported = 'Notification' in window && 'serviceWorker' in navigator;
-export const notifyPermission = () => (notifySupported ? Notification.permission : 'denied');
+export const notifySupported = (native && !!Notif) || ('Notification' in window && 'serviceWorker' in navigator);
+// nell'app Android il permesso lo tiene Android: lo leggiamo all'avvio e quando lo chiedi
+let nativePerm = 'default';
+const permOf = (p) => (p?.display === 'granted' ? 'granted' : p?.display === 'denied' ? 'denied' : 'default');
+export const notifyPermission = () => (native && Notif ? nativePerm : notifySupported ? Notification.permission : 'denied');
 export async function askNotify() {
+  if (native && Notif) {
+    nativePerm = permOf(await Notif.requestPermissions().catch(() => null));
+    syncReminders();
+    return nativePerm;
+  }
   if (!notifySupported) return 'denied';
   return Notification.requestPermission();
 }
@@ -76,7 +87,8 @@ async function fire(it, at) {
   it.fired = at;
   saveData();
   const late = Date.now() - at > 2 * 60000;
-  if (!pushed(it, at) && notifyPermission() === 'granted' && document.hidden) {
+  // nell'app Android la notifica l'ha già mostrata Android, all'ora giusta
+  if (!native && !pushed(it, at) && notifyPermission() === 'granted' && document.hidden) {
     const reg = await navigator.serviceWorker.ready.catch(() => null);
     reg?.showNotification(late ? 'MyList · promemoria passato' : 'MyList', {
       body: body(it), tag: it.id, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png',
@@ -98,7 +110,7 @@ function armLocal() {
     if (it.done || at == null || it.fired === at) continue;
     if (at <= now) {
       // a app chiusa: se l'ha già consegnato ntfy basta segnarlo, altrimenti lo mostriamo adesso
-      if (pushed(it, at)) { it.fired = at; quiet = true; } else fire(it, at);
+      if (pushed(it, at) || (native && nativeArmed(it, at))) { it.fired = at; quiet = true; } else fire(it, at);
     } else if (at - now < 2 ** 31) timers.push(setTimeout(() => fire(it, at), at - now));
   }
   if (quiet) saveData();
@@ -167,9 +179,76 @@ async function pollDone() {
   } catch (err) { console.warn('ntfy fatto', err); }
 }
 
+// —— Notifiche native (app Android) ——
+const NATIVE_KEY = 'mylist.native.v1'; // { id numerico: "momento|testo|sequenza" } avvisi programmati su Android
+const NATIVE_HORIZON = 14 * 864e5;
+const readNative = () => read(NATIVE_KEY, {});
+// un id numerico stabile per ogni avviso (Android vuole un intero a 31 bit)
+function nid(seq) {
+  let h = 7;
+  for (const ch of seq) h = (Math.imul(h, 31) + ch.charCodeAt(0)) | 0;
+  return (h & 0x3fffffff) || 1;
+}
+// l'avviso di quel momento era programmato su Android: è già suonato da solo
+const nativeArmed = (it, at) => Object.values(readNative()).some((v) => v.startsWith(`${at}|`) && v.endsWith(`|${seqOf(it)}`));
+let nativeReady = null;
+function prepareNative() {
+  if (nativeReady) return nativeReady;
+  nativeReady = (async () => {
+    nativePerm = permOf(await Notif.checkPermissions().catch(() => null));
+    await Notif.createChannel({
+      id: 'promemoria', name: 'Promemoria', description: 'Gli avvisi delle cose da fare',
+      importance: 5, visibility: 1, vibration: true, lights: true, lightColor: '#F5B800',
+    }).catch(() => {});
+    await Notif.registerActionTypes({ types: [{ id: 'voce', actions: [{ id: 'done', title: 'Fatto' }, { id: 'snooze', title: '+10 min' }] }] }).catch(() => {});
+    Notif.addListener('localNotificationActionPerformed', ({ actionId, notification: n }) => {
+      const done = n?.extra?.done;
+      if (!done) return;
+      if (actionId === 'done') onRemoteDone(...done.split('|'));
+      else if (actionId === 'snooze') {
+        Notif.schedule({ notifications: [{ ...n, id: nid(`${done}-s${Date.now()}`), schedule: { at: new Date(Date.now() + 10 * 60000), allowWhileIdle: true } }] }).catch(() => {});
+      }
+    });
+  })();
+  return nativeReady;
+}
+async function syncNative() {
+  await prepareNative();
+  if (nativePerm !== 'granted') return;
+  const now = Date.now();
+  const want = new Map();
+  for (const it of data.items) {
+    if (it.done) continue;
+    for (const { due, at } of occurrences(it, now + NATIVE_HORIZON)) {
+      if (at <= now + 5000 || it.fired === at) continue;
+      const seq = seqOf(it, due);
+      want.set(nid(seq), { it, due, at, key: `${at}|${it.text}|${seq}` });
+    }
+  }
+  const map = readNative();
+  const cancel = Object.keys(map).filter((id) => want.get(+id)?.key !== map[id]);
+  if (cancel.length) await Notif.cancel({ notifications: cancel.map((id) => ({ id: +id })) }).catch(() => {});
+  cancel.forEach((id) => delete map[id]);
+  const add = [...want].filter(([id]) => !map[id]);
+  if (add.length) {
+    try {
+      await Notif.schedule({
+        notifications: add.map(([id, { it, due, at }]) => ({
+          id, title: 'MyList', body: body(it), largeBody: body(it),
+          channelId: 'promemoria', actionTypeId: 'voce', autoCancel: true,
+          schedule: { at: new Date(at), allowWhileIdle: true },
+          extra: { done: `${it.id}|${due}` },
+        })),
+      });
+      add.forEach(([id, { key }]) => { map[id] = key; });
+    } catch (err) { console.warn('notifiche native', err); }
+  }
+  localStorage.setItem(NATIVE_KEY, JSON.stringify(map));
+}
+
 export function syncReminders() {
   clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => { armLocal(); syncNtfy(); }, 250);
+  syncTimer = setTimeout(() => { armLocal(); syncNtfy(); if (native && Notif) syncNative(); }, 250);
 }
 
 export function initReminders({ fire: cb, remoteDone }) {

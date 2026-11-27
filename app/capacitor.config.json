@@ -1,0 +1,8 @@
+{
+  "appId": "it.mylist.app",
+  "appName": "MyList",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#E3E3DF"
+  }
+}

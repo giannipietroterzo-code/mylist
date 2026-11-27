@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Il logo di MyList (icons/icon.svg) come primo piano dell'icona adattiva: il viewport 768 lascia intorno
+     ai 512 del disegno originale il margine che Android ritaglia con la forma del launcher -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="768" android:viewportHeight="768">
+    <group android:translateX="120" android:translateY="128">
+        <path android:pathData="M130,224v64M180,176v160M230,208v96"
+            android:strokeColor="#262626" android:strokeWidth="34"
+            android:strokeLineCap="round" android:strokeLineJoin="round" />
+        <path android:pathData="M276,262 L320,306 L398,204"
+            android:strokeColor="#262626" android:strokeWidth="34"
+            android:strokeLineCap="round" android:strokeLineJoin="round" />
+    </group>
+</vector>

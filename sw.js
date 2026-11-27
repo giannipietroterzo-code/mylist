@@ -18,6 +18,7 @@ const ASSETS = [
   './js/reminders.js',
   './js/chat.js',
   './js/talk.js',
+  './js/native.js',
   './js/sound.js',
   './manifest.webmanifest',
   './icons/icon.svg',

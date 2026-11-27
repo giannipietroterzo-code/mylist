@@ -41,6 +41,21 @@ Per l'installazione e per il microfono serve **HTTPS**. Il modo più rapido, gra
 
 > Nota: la dettatura usa il riconoscimento vocale di Chrome, che lavora online. Senza rete puoi sempre usare il 🎙️ della tastiera (Gboard).
 
+## L'app Android vera
+
+Oltre al sito c'è un APK, la stessa app impacchettata con Capacitor (cartella `app/`). In più del sito ha:
+- **promemoria nativi**: suonano all'ora esatta anche ad app chiusa e dopo un riavvio, fino a 14 giorni avanti, con **Fatto** e **+10 min** sulla notifica; ntfy non serve e il testo non esce dal telefono;
+- **dettatura e voce di Android** al posto di quelle di Chrome (che nella WebView non ci sono);
+- il **tasto indietro** che chiude quello che è aperto.
+
+I dati dell'app sono separati da quelli del sito: si portano con Impostazioni → Esporta / Importa.
+
+**Installare**: scarica l'APK dall'ultima [release](https://github.com/giannipietroterzo-code/mylist/releases/latest), aprilo sul telefono, consenti l'installazione da quella fonte e tocca Installa.
+
+**Aggiornare**: all'apertura l'app controlla `apk.json` sul sito. Se c'è una versione nuova, la versione accanto al titolo diventa **↻ 1.32** e compare *Aggiorna*: il telefono scarica l'APK e chiede di installarlo sopra, i dati restano. Toccando la versione si controlla a mano.
+
+**Firma**: ogni APK va firmato con la stessa chiave, che sta **fuori dal repo** in `~/Lavori/MyList-firma` (con `keystore.properties`). Va tenuta con una copia di sicurezza: se si perde, l'app installata non si aggiorna più e va reinstallata da zero.
+
 ## Configurare OpenRouter
 
 1. Crea una chiave su <https://openrouter.ai/keys> (consiglio: imposta un **limite di spesa** sulla chiave).
@@ -114,8 +129,11 @@ js/talk.js              la chat a voce a mani libere: il nucleo che ascolta, pen
 js/when.js              date, orari e promemoria senza AI ("alle 16", "tra 20 minuti", "mezz'ora prima")
 js/reminders.js         avvisi: notifiche locali + programmazione su ntfy
 js/sound.js             din-don dei promemoria con l'app aperta (sintetizzato, nessun file)
+js/native.js            solo nell'app Android: dettatura, voce, tasto indietro e aggiornamenti coi plugin nativi
 sw.js                   service worker (offline)
 manifest.webmanifest    installazione, scorciatoie, condivisione
+app/                    l'app Android (Capacitor): scripts/build-apk.sh crea l'APK firmato
+tools/pubblica.sh       pubblica sito + APK (GitHub Releases) + apk.json in un colpo
 icons/                  logo (onda vocale + spunta) e icone dell'app, disegnati a mano (rigenerabili con: node tools/make-icons.mjs)
 vendor/uicons/          Flaticon UIcons: solo le icone usate (rigenera con: node tools/build-uicons.mjs)
 ```
@@ -127,3 +145,5 @@ python3 -m http.server 8790
 ```
 
 Poi apri <http://localhost:8790>. Quando pubblichi una nuova versione, cambia il numero in `js/version.js` (es. `1.9` → `2.0`): compare accanto al titolo e fa scaricare ai telefoni i file aggiornati, che si ricaricano da soli.
+
+Per pubblicare anche l'app Android, dopo il commit: `tools/pubblica.sh "cosa è cambiato"` (manda il sito, compila l'APK firmato, crea la release e aggiorna `apk.json`). Serve Java 21 in `~/Library/Java/JavaVirtualMachines` e l'SDK Android in `~/Library/Android/sdk`.
